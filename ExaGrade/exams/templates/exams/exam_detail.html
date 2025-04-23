@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Exam Details - {{ exam.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ exam.name }}</h2>
+    <p><strong>Course:</strong> {{ exam.course.name }}</p>
+    <p><strong>Status:</strong> {{ exam.get_status_display }}</p>
+    <p><strong>Instructor:</strong> {{ exam.instructor.get_full_name }}</p>
+    <p><strong>Created At:</strong> {{ exam.created_at|date:"F d, Y" }}</p>
+
+    {% if exam.pdf_file %}
+        <div class="mt-3">
+            <a href="{{ exam.pdf_file.url }}" target="_blank" class="btn btn-primary">
+                📄 View PDF
+            </a>
+            <a href="{% url 'exams:download_pdf' exam.id %}" class="btn btn-success">
+                ⬇️ Download PDF
+            </a>
+        </div>
+    {% else %}
+        <p class="text-muted">No PDF available.</p>
+    {% endif %}
+
+    <hr>
+
+    <h3>Exam Questions</h3>
+    {% if questions %}
+        <ul class="list-group">
+            {% for question in questions %}
+                <li class="list-group-item">
+                    <strong>{{ forloop.counter }}.</strong> {{ question.text }}
+                    <span class="badge bg-info">{{ question.get_question_type_display }}</span>
+                    {% if request.user.is_instructor %}
+                        <a href="{% url 'exams:edit_question' question.id %}" class="btn btn-sm btn-warning">Edit</a>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No questions added yet.</p>
+    {% endif %}
+
+    {% if request.user.is_instructor %}
+        <a href="{% url 'exams:add_question' exam.id %}" class="btn btn-success mt-3">
+            ➕ Add Question
+        </a>
+    {% endif %}
+</div>
+{% endblock %}

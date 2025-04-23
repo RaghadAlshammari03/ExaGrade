@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <div class="flex items-center gap-2">
+        <h1 id="courseNameDisplay" class="text-3xl font-bold text-gray-800">{{ course.name }}</h1>
+    
+        {% if request.user.is_instructor %}
+        <form id="editCourseNameForm" method="POST" action="{% url 'courses:edit_course_name' course.id %}" class="hidden">
+            {% csrf_token %}
+            <input type="text" name="new_name" id="courseNameInput" value="{{ course.name }}" class="text-3xl font-bold text-gray-800 bg-yellow-50 px-2 py-1 rounded border border-yellow-300 focus:outline-none focus:ring focus:border-yellow-500">
+        </form>
+        <button onclick="toggleEditCourseName()" title="Edit Course Name" class="text-blue-500 hover:text-blue-600">
+            <i data-lucide="edit-3" class="w-5 h-5"></i>
+        </button>
+        {% endif %}
+    </div>    
+    <p class="text-gray-600 mt-2">{{ course.description }}</p>
+
+    <!-- Show Course Code (Instructor Only) -->
+    {% if request.user.is_instructor %}
+    <div class="mt-4 bg-gray-100 p-3 rounded-md">
+        <p class="text-sm text-gray-700">Share this course code for students to enroll:</p>
+        <code 
+            title="Click to copy"
+            class="inline-flex items-center gap-2 group font-mono text-blue-600 text-base bg-blue-50 px-3 py-1 rounded cursor-pointer hover:bg-blue-100 transition"
+            onclick="copyToClipboard('{{ course.course_code|escapejs }}', 'icon-{{ course.course_code }}')"
+        >
+            <i id="icon-{{ course.course_code }}" data-lucide="copy" class="w-4 h-4 text-blue-400 transition-all"></i>
+            {{ course.course_code }}
+        </code>
+    </div>    
+    {% endif %}
+
+    <!-- Exams Table -->
+    <h2 class="text-xl font-semibold text-gray-800 mt-6">Exams</h2>
+    <div class="mt-1 overflow-x-auto">
+        {% if exams or electronic_exams %}
+    <div class="mt-1 overflow-x-auto rounded-lg shadow border border-gray-200">
+        <table class="min-w-full divide-y divide-gray-200 bg-white text-sm text-left">
+            <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                    <th class="px-6 py-3 font-semibold tracking-wide">Exam Name</th>
+                    {% if request.user.is_instructor %}
+                        <th class="px-6 py-3 font-semibold tracking-wide text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold tracking-wide text-center">Students Grades</th>
+                    {% else %}
+                        <th class="px-6 py-3 font-semibold tracking-wide text-center">Your Grade</th>
+                        <th class="px-6 py-3 font-semibold tracking-wide text-center">View Feedback</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-gray-800">
+                {% for exam in exams %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 font-medium">
+                        {% if exam.name %}{{ exam.name }}{% else %}{{ exam.title }}{% endif %}
+                    </td>
+                    {% if request.user.is_instructor %}
+                        <td class="px-6 py-4 text-center">
+                            <span class="px-3 py-1 text-sm font-semibold rounded-full text-white
+                                {% if exam.status == 'done' %} bg-green-500
+                                {% elif exam.status == 'progress' %} bg-yellow-500
+                                {% elif exam.status == 'pending' %} bg-gray-500
+                                {% elif exam.status == 'requires_attention' %} bg-red-600
+                                {% elif exam.status == 'new_papers_uploaded' %} bg-orange-500
+                                {% endif %}">
+                                {{ exam.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <a href="{% if exam.exam_type == 'electronic' %}
+                                        {% url 'electronic_exams:exam_detail' exam.id %}
+                                    {% else %}
+                                        {% url 'exams:detail' exam.id %}
+                                    {% endif %}" 
+                            class="text-blue-600 hover:underline font-semibold">
+                                View Grades
+                            </a>
+                        </td>
+                    {% else %}
+                        <td class="px-6 py-4 text-center">
+                            {% if exam.exam_type == 'electronic' %}
+                                {% if exam.is_submitted_by_user %}
+                                    {% if exam.student_score is not None and exam.grades_released %}
+                                        {{ exam.student_score }} / {{ exam.total_score }}
+                                    {% else %}
+                                        <span class="text-gray-500">Not Graded Yet</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-gray-400">Not Taken</span>
+                                {% endif %}
+                            {% else %}
+                                {% if exam.student_grade %}
+                                    {{ exam.student_grade.score }} / {{ exam.total_marks }}
+                                {% else %}
+                                    <span class="text-gray-500">Not Graded Yet</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if exam.exam_type == 'electronic' %}
+                                {% if exam.grades_released and exam.student_feedback %}
+                                    <a href="{% url 'electronic_exams:exam_results' exam.id %}" class="text-green-600 hover:underline">View Feedback</a>
+                                {% elif exam.is_submitted_by_user %}
+                                    <span class="text-gray-400 italic">No Feedback Yet</span>
+                                {% else %}
+                                    <span class="text-gray-400 italic">Not Taken</span>
+                                {% endif %}
+                            {% else %}
+                                {% if exam.student_grade and exam.student_grade.feedback %}
+                                    <a href="{% url 'exams:detail' exam.id %}" class="text-green-600 hover:underline">
+                                        View Feedback
+                                    </a>
+                                {% else %}
+                                    <span class="text-gray-400 italic">No Feedback Yet</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500 mt-4">No exams available for this course.</p>
+    {% endif %}
+    </div>
+
+
+    <!-- Enrolled Students Table (Instructor Only) -->
+    <h2 class="text-xl font-semibold text-gray-800 mt-6">Enrolled Students</h2>
+    {% if students %}
+    <div class="mt-1 overflow-x-auto rounded-lg shadow border border-gray-200">
+        <table class="min-w-full divide-y divide-gray-200 bg-white text-sm text-left">
+            <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                    <th class="px-6 py-3 font-semibold tracking-wide">Student Name</th>
+                    <th class="px-6 py-3 font-semibold tracking-wide">Student ID</th>
+                    <th class="px-6 py-3 font-semibold tracking-wide text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-gray-800">
+                {% for student in students %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4">{{ student.username }}</td>
+                    <td class="px-6 py-4">{{ student.student_id }}</td>
+                    <td class="px-6 py-4 text-center">
+                        <a href="{% url 'courses:student_grades' student.id %}" class="text-blue-600 hover:underline font-semibold">
+                            View Grades
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500">No students enrolled yet.</p>
+    {% endif %}    
+
+<div id="paperFeedbackModal" class="fixed inset-0 z-50 bg-black bg-opacity-50 hidden items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-[500px] max-w-full">
+      <h2 class="text-lg font-semibold mb-2">AI Feedback</h2>
+      <p id="paperFeedbackContent" class="text-gray-700 whitespace-pre-wrap"></p>
+      <div class="mt-4 text-right">
+        <button onclick="document.getElementById('paperFeedbackModal').classList.add('hidden')" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+  
+    <!-- Show Instructor Details for Students -->
+    {% if not request.user.is_instructor %}
+    <h2 class="text-xl font-semibold text-gray-800 mt-6">Instructor</h2>
+    <div class="mt-2 p-4 bg-gray-100 rounded-md">
+        <p class="text-gray-700 font-bold">{{ course.instructor.username }}</p>
+        <p class="text-gray-600">{{ course.instructor.email }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Delete Course Button (Instructor Only) -->
+    {% if request.user.is_instructor %}
+    <button onclick="showModal()" class="mt-6 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+        Delete Course
+    </button>
+    {% endif %}
+</div>  
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex justify-center items-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white w-96 p-6 rounded-lg shadow-lg text-center">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Are you sure you want to delete this course?</h2>
+        <p class="text-gray-600">This action cannot be undone.</p>
+
+        <div class="mt-4 flex justify-center space-x-4">
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition">
+                Cancel
+            </button>
+            <a href="{% url 'courses:delete' course.id %}" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+                Yes, Delete
+            </a>
+        </div>
+    </div>
+</div>
+</div>
+
+
+ <!-- Toast Notification -->
+ <div id="toast"
+     class="fixed top-5 right-5 bg-green-500 text-white px-4 py-2 rounded shadow-lg hidden z-50 transition-opacity duration-300">
+     Enrollment code copied!
+</div>
+
+<script>
+    function showModal() {
+        document.getElementById("deleteModal").classList.remove("opacity-0", "pointer-events-none");
+    }
+
+    function hideModal() {
+        document.getElementById("deleteModal").classList.add("opacity-0", "pointer-events-none");
+    }
+
+    function copyToClipboard(text, iconId) {
+    console.log("Copying:", text, "Icon ID:", iconId);
+
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = document.getElementById(iconId);
+
+        if (icon) {
+            icon.setAttribute("data-lucide", "check");
+            lucide.createIcons(); 
+        } else {
+            console.error("❌ Icon not found:", iconId);
+        }
+
+        const toast = document.getElementById("toast");
+        if (toast) {
+            toast.classList.remove("hidden");
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 2000);
+        }
+
+        setTimeout(() => {
+            const icon = document.getElementById(iconId);
+            if (icon) {
+                icon.setAttribute("data-lucide", "copy");
+                lucide.createIcons();
+            } else {
+                console.error("❌ Failed to revert icon:", iconId);
+            }
+        }, 1500);
+    });
+}
+
+function toggleEditCourseName() {
+    const form = document.getElementById('editCourseNameForm');
+    const input = document.getElementById('courseNameInput');
+
+    if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden');
+        input.focus();
+
+        input.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                form.submit();
+            }
+        });
+
+        input.addEventListener("blur", () => {
+            form.submit();
+        });
+    }
+}
+
+function showPaperFeedbackModal(examId, feedback) {
+    document.getElementById("paperFeedbackContent").textContent = feedback;
+    document.getElementById("paperFeedbackModal").classList.remove("hidden");
+}
+</script>
+{% endblock %}

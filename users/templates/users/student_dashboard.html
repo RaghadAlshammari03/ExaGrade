@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-4xl font-bold text-gray-800">Student Dashboard</h1>
+
+    <!-- ✅ Enrolled Courses (Card Style) -->
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Enrolled Courses</h2>
+        {% if enrolled_courses %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+            {% for course in enrolled_courses %}
+            <div class="relative bg-white shadow-md rounded-lg p-5 hover:shadow-lg transition-all duration-300">
+                <div class="absolute left-0 top-0 h-full w-1.5 bg-amber-500 rounded-l-lg"></div>
+                <h2 class="text-xl font-bold text-[#1C304F]">{{ course.name }}</h2>
+                <p class="text-gray-600 mt-1 mb-2">{{ course.description|default:"No description provided." }}</p>
+                <div class="mt-3">
+                    <p class="text-sm font-semibold text-gray-800">Instructor: {{ course.instructor.get_full_name }}</p>
+                    <p class="text-sm text-gray-500">{{ course.instructor.email }}</p>
+                </div>
+                <a href="{% url 'courses:detail' course.id %}" class="mt-4 inline-block bg-[#1C304F] hover:bg-[#16263F] text-white px-4 py-2 rounded-lg text-sm font-semibold shadow">
+                    View Course
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 mt-4">You are not enrolled in any courses.</p>
+        {% endif %}
+    </div>
+
+    <!-- ✅ Grades Section -->
+    <div class="mt-10">
+        <h2 class="text-xl font-bold text-gray-800">Grades</h2>
+        {% if grades %}
+        <table class="mt-4 w-full border">
+            <thead>
+                <tr class="bg-gray-100 text-sm">
+                    <th class="py-2 px-4 text-left">Course</th>
+                    <th class="py-2 px-4 text-left">Exam</th>
+                    <th class="py-2 px-4 text-left">Score</th>
+                    <th class="py-2 px-4 text-left">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in grades %}
+                <tr class="border-b text-sm">
+                    <td class="py-2 px-4 text-gray-700">{{ item.course_name }}</td>
+                    <td class="py-2 px-4 text-gray-800 font-medium">{{ item.exam_name }}</td>
+                    <td class="py-2 px-4 font-semibold text-blue-700">{{ item.score }}</td>
+                    <td class="py-2 px-4 text-gray-500">{{ item.date|date:"M d, Y" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-gray-500 mt-2">No grades available yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ExaGrade</title>
+    
+        <!-- ✅ Font Awesome (Only This) -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-Mnt3zQbKLTyoZzAJ3Hfr6eLgoxSXLdOnGoK8iD4S3oFys9u0nlofsU9MGWTxbsYuTSHTehYV9MsVIkK+w6SVA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+        <!-- Tailwind CSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+    </head>
+
+    <script src="{% static 'js/bundle.js' %}"></script>
+
+<body class="bg-gray-100 relative">
+ 
+    <!-- Toast Messages -->
+    {% if messages %}
+    <div id="message-container" class="fixed top-4 right-4 z-50 w-96">
+        {% for message in messages %}
+        <div class="mb-2 px-4 py-3 rounded shadow-lg text-white text-sm font-semibold transition-opacity duration-500 ease-in-out
+                    {% if message.tags == 'success' %} bg-green-500 
+                    {% elif message.tags == 'error' %} bg-red-500 
+                    {% elif message.tags == 'warning' %} bg-yellow-500 
+                    {% else %} bg-blue-500 {% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    <script>
+        setTimeout(function() {
+            let messageBox = document.getElementById("message-container");
+            if (messageBox) {
+                messageBox.style.opacity = "0";
+                setTimeout(() => messageBox.remove(), 500);
+            }
+        }, 3000);
+    </script>
+    {% endif %}
+
+    <div class="flex h-screen">
+
+        <!-- Sidebar (Now Full Height & Scrollable) -->
+        <nav id="sidebar" class="w-64 bg-[#1C304F] text-white p-5 fixed inset-y-0 left-0 overflow-y-auto h-screen transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 md:block z-50">
+            <h2 class="text-3xl font-bold mb-4">ExaGrade</h2>
+            <ul class="mt-6 space-y-2">
+                {% if user.is_authenticated %}
+                    
+                    <!-- Dashboard -->
+                    {% if user.is_instructor %}
+                        <li>
+                            <a href="{% url 'users:instructor_dashboard' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li>
+                            <a href="{% url 'users:student_dashboard' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    <!-- Courses -->
+                    <li>
+                        <a href="{% url 'courses:list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                            <i class="fas fa-book"></i>
+                            <span>Courses</span>
+                        </a>
+                    </li>
+
+                    {% if user.is_instructor %}
+                        <li>
+                            <a href="{% url 'exams:list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                                <i class="fas fa-file-alt"></i>
+                                <span>Paper Exams</span>
+                            </a>
+                        </li>
+                        <li>
+                                <a href="{% url 'electronic_exams:exam_list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                                    <i class="fas fa-laptop-code"></i>
+                                    <span>Electronic Exams</span>
+                                </a>                                         
+                        </li>
+                        
+                    {% endif %}
+
+                    <!-- Profile, Settings, Logout -->
+                    <li>
+                        <a href="{% url 'users:profile' request.user.id %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                            <i class="fas fa-user"></i>
+                            <span>Profile</span>
+                        </a>
+                    </li>                    
+                    <li>
+                        <a href="{% url 'users:settings' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'users:logout' %}" class="flex items-center space-x-2 text-red-400 hover:text-red-600">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+
+        <!-- Mobile Sidebar Overlay (Closes When Clicked) -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden md:hidden" onclick="toggleSidebar()"></div>
+
+        <!-- Mobile Sidebar Toggle Button -->
+        <div class="fixed top-4 left-4 md:hidden z-50">
+            <button onclick="toggleSidebar()" class="text-[#1C304F] text-2xl bg-white p-2 rounded shadow-md">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+        </div>        
+
+        <!-- Main Content Area (Adjusted for Sidebar) -->
+        <main class="flex-1 p-10 ml-0 md:ml-64 overflow-y-auto">
+            {% block content %} {% endblock %}
+        </main>
+
+    </div>
+
+    <!-- JavaScript for Sidebar Toggle -->
+    <script>
+        function toggleSidebar() {
+            let sidebar = document.getElementById("sidebar");
+            let overlay = document.getElementById("sidebar-overlay");
+
+            if (sidebar.classList.contains("-translate-x-full")) {
+                sidebar.classList.remove("-translate-x-full");
+                overlay.classList.remove("hidden");
+            } else {
+                sidebar.classList.add("-translate-x-full");
+                overlay.classList.add("hidden");
+            }
+        }
+    </script>
+
+    <script src="{% static 'js/bundle.js' %}"></script>
+    <script src="{% static 'js/main.js' %}" defer></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (window.lucide) {
+          lucide.createIcons();
+        }
+      });
+    </script>
+    
+</body>  
+</html>

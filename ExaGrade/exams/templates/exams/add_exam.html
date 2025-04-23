@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-3xl font-bold text-[#1C304F]">Add New Exam</h1>
+
+
+<!-- Exam Form -->
+<form method="POST" enctype="multipart/form-data" class="mt-5 bg-white p-6 shadow-md rounded-lg space-y-4">
+    {% csrf_token %}
+
+    
+
+    <!-- Course Selection -->
+    <div>
+        <label class="block text-gray-700 font-semibold mb-1">Select Course:</label>
+        <select name="course_id" class="border rounded-lg px-4 py-2 w-full focus:border-blue-500" required>
+            <option value="">-- Select Course --</option>
+            {% for course in courses %}
+                <option value="{{ course.id }}" {% if request.POST.course_id == course.id|stringformat:"s" %}selected{% endif %}>
+                    {{ course.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Exam Name -->
+    <div>
+        <label class="block text-gray-700 font-semibold mb-1">Exam Name:</label>
+        {{ form.name }}
+    </div>
+
+    <!-- Upload Student Papers -->
+    <div>
+        <label class="block text-gray-700 font-semibold mb-1">Upload Student Papers:</label>
+        <input type="file" name="student_papers" multiple class="border rounded-lg px-4 py-2 w-full focus:border-blue-500">
+        <p class="text-sm text-gray-500 mt-1">You can upload multiple student papers at once.</p>
+    </div>
+
+    <!-- Upload Solution Module -->
+    <div>
+        <label class="block text-gray-700 font-semibold mb-1">Upload Solution Module:</label>
+        {{ form.solution_module }}
+    </div>
+
+    <!-- Submit Button -->
+    <button type="submit" class="w-full bg-[#1C304F] text-white py-3 px-4 rounded-lg text-lg font-semibold shadow-md hover:bg-[#14243A] transition duration-300">
+        Add Exam
+    </button>
+</form>
+{% endblock %}

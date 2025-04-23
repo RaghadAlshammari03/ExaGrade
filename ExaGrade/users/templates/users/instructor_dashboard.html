@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-3xl font-bold text-gray-800">Instructor Dashboard</h1>
+
+    <!-- Courses Section -->
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Your Courses</h2>
+
+        {% if courses %}
+            <ul class="mt-4">
+                {% for course in courses %}
+                    <li class="border-b py-3 flex justify-between">
+                        <a href="{% url 'courses:detail' course.id %}" class="text-blue-500 hover:underline">
+                            {{ course.name }}
+                        </a>
+                        <span class="text-gray-500">{{ course.students.count }} students</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 mt-2">You have not created any courses yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Exams Section -->
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Exams</h2>
+        <a href="{% url 'exams:add' %}" class="mt-3 inline-block bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
+            + Create Exam
+        </a>
+        {% if exams %}
+            <table class="mt-4 w-full border">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="py-2 px-4 text-left">Exam Name</th>
+                        <th class="py-2 px-4 text-left">Status</th>
+                        <th class="py-2 px-4 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exam in exams %}
+                        <tr class="border-b">
+                            <td class="py-2 px-4">{{ exam.name }}</td>
+                            <td class="py-2 px-4">
+                                {% if exam.status == "done" %}
+                                    <span class="text-green-500">Completed</span>
+                                {% elif exam.status == "progress" %}
+                                    <span class="text-yellow-500">In Progress</span>
+                                {% else %}
+                                    <span class="text-gray-500">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-4">
+                                <a href="{% url 'exams:detail' exam.id %}" class="text-blue-500 hover:underline">View Details</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-gray-500 mt-2">No exams created yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

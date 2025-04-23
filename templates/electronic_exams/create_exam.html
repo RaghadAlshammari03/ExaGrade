@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 py-10">
+    <div class="max-w-5xl w-full bg-white shadow-2xl rounded-3xl overflow-hidden transition-all">
+
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-6 px-8 rounded-t-3xl flex justify-between items-center">
+            <h1 class="text-3xl font-bold">📝 {% if exam %}Edit{% else %}Create New{% endif %} Exam</h1>
+            
+        </div>
+
+        <form method="post" action="{% if exam %}?edit={{ exam.id }}{% endif %}" class="p-8 space-y-6" id="examForm">
+            {% csrf_token %}
+
+            <!-- Exam Details -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="text-gray-700 text-lg font-medium">Exam Name</label>
+                    <input type="text" name="exam_name" required placeholder="Enter exam title" 
+                        value="{{ exam.name|default:'' }}"
+                        class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="text-gray-700 text-lg font-medium">Select Course</label>
+                    <select name="course" required class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">-- Select a Course --</option>
+                        {% for course in courses %}
+                            <option value="{{ course.id }}" {% if exam and exam.course.id == course.id %}selected{% endif %}>{{ course.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Total Marks & Duration -->
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <label class="text-gray-700 text-lg font-medium">Total Marks</label>
+                    <input type="number" id="total_marks" name="total_marks" required placeholder="Enter total marks"
+                        value="{{ exam.total_marks|default:'' }}" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" readonly>
+                </div>
+                <div>
+                    <label class="text-gray-700 text-lg font-medium">Exam Duration (Optional)</label>
+                    <input type="number" name="exam_time" placeholder="Time in minutes" value="{{ exam.duration_minutes|default:'' }}"
+                        class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="text-gray-700 text-lg font-medium">Question Navigation</label>
+                <select name="can_navigate" required class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="true" {% if exam and exam.can_navigate %}selected{% endif %}>Allow Navigation</option>
+                    <option value="false" {% if exam and not exam.can_navigate %}selected{% endif %}>No Back Navigation</option>
+                </select>
+            </div>
+            
+            <!-- Question Buttons -->
+            <h2 class="text-xl font-semibold text-gray-900 mt-6">📌 Add Questions</h2>
+            <div class="flex justify-between gap-3">
+                <button type="button" id="add_tf" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg shadow-lg hover:bg-blue-700">+ True/False</button>
+                <button type="button" id="add_mcq" class="w-full px-4 py-2 bg-green-500 text-white rounded-lg shadow-lg hover:bg-green-700">+ MCQ</button>
+                <button type="button" id="add_short" class="w-full px-4 py-2 bg-purple-500 text-white rounded-lg shadow-lg hover:bg-purple-700">+ Short Answer</button>
+                <button type="button" id="add_long" class="w-full px-4 py-2 bg-red-500 text-white rounded-lg shadow-lg hover:bg-red-700">+ Long Answer</button>
+            </div>
+
+            <!-- Questions Container -->
+            <div id="questions_container" class="mt-6 space-y-4">{% for q in questions_by_type.true_false %}
+                <div class="question-block relative p-4 border rounded-xl bg-blue-50">
+                    <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">True/False Question</label>
+                    <input type="text" name="tf_questions[]" value="{{ q.text }}" class="w-full px-3 py-2 border rounded mb-2">
+                    <select name="tf_answers[]" class="w-full px-3 py-2 border rounded mb-2">
+                        <option value="True" {% if q.correct_answer == "True" %}selected{% endif %}>True</option>
+                        <option value="False" {% if q.correct_answer == "False" %}selected{% endif %}>False</option>
+                    </select>
+                    <input type="number" name="tf_marks[]" value="{{ q.marks }}" class="w-full px-3 py-2 border rounded">
+                </div>
+                {% endfor %}
+            
+                {% for q in questions_by_type.mcq %}
+                <div class="question-block relative p-4 border rounded-xl bg-green-50">
+                    <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">MCQ Question</label>
+                    <input type="text" name="mcq_questions[]" value="{{ q.text }}" class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="text" name="mcq_options_1[]" value="{{ q.option_list.0 }}" class="w-full px-3 py-2 border rounded mb-1">
+                    <input type="text" name="mcq_options_2[]" value="{{ q.option_list.1 }}" class="w-full px-3 py-2 border rounded mb-1">
+                    <input type="text" name="mcq_options_3[]" value="{{ q.option_list.2 }}" class="w-full px-3 py-2 border rounded mb-1">
+                    <input type="text" name="mcq_options_4[]" value="{{ q.option_list.3 }}" class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="text" name="mcq_answers[]" value="{{ q.correct_answer }}" class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="number" name="mcq_marks[]" value="{{ q.marks }}" class="w-full px-3 py-2 border rounded">
+                </div>
+                {% endfor %}
+            
+                {% for q in questions_by_type.short_answer %}
+                <div class="question-block relative p-4 border rounded-xl bg-purple-50">
+                    <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Short Answer Question</label>
+                    <input type="text" name="short_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="text" name="short_correct_answer[]" placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="number" name="short_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded mb-2">
+                
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Type</label>
+                    <select name="short_eval_type[]" class="w-full px-3 py-2 border rounded mb-2">
+                        <option value="strict">Strict</option>
+                        <option value="flexible">Flexible</option>
+                        <option value="keywords">Keywords</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <input type="text" name="short_custom_note[]" placeholder="Optional Custom Note" class="w-full px-3 py-2 border rounded mb-2">
+                    
+                </div>
+                {% endfor %}
+            
+                {% for q in questions_by_type.long_answer %}
+                <div class="question-block relative p-4 border rounded-xl bg-red-50">
+                    <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Long Answer Question</label>
+                    <input type="text" name="long_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="text" name="long_correct_answer[]" placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+                    <input type="number" name="long_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded mb-2">
+                
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Type</label>
+                    <select name="long_eval_type[]" class="w-full px-3 py-2 border rounded mb-2">
+                        <option value="strict">Strict</option>
+                        <option value="flexible">Flexible</option>
+                        <option value="keywords">Keywords</option>
+                        <option value="coding">Coding</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <input type="text" name="long_custom_note[]" placeholder="Optional Custom Note" class="w-full px-3 py-2 border rounded mb-2">
+                    
+                </div>
+                {% endfor %}</div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-lg font-semibold rounded-xl shadow-lg hover:scale-105 transition">
+                🚀 Submit Exam
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function removeBlock(button) {
+    button.closest('.question-block').remove();
+    updateTotalMarks();
+}
+
+function updateTotalMarks() {
+    let total = 0;
+    const markInputs = document.querySelectorAll('#questions_container input[name$="_marks[]"]');
+    markInputs.forEach(input => {
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) total += val;
+    });
+    document.getElementById('total_marks').value = total;
+}
+
+function attachMarksListener(container) {
+    container.querySelectorAll('input[name$="_marks[]"]').forEach(input => {
+        input.addEventListener('input', updateTotalMarks);
+    });
+}
+
+// Add True/False
+document.getElementById('add_tf').addEventListener('click', function() {
+    const container = document.createElement('div');
+    container.className = 'question-block relative p-4 border rounded-xl bg-blue-50';
+    container.innerHTML = `
+        <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+        <label class="block text-sm font-medium text-gray-700 mb-1">True/False Question</label>
+        <input type="text" name="tf_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+        <select name="tf_answers[]" class="w-full px-3 py-2 border rounded mb-2">
+            <option value="True">True</option>
+            <option value="False">False</option>
+        </select>
+        <input type="number" name="tf_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded">
+    `;
+    document.getElementById('questions_container').appendChild(container);
+    attachMarksListener(container);
+    updateTotalMarks();
+});
+
+// Add MCQ
+document.getElementById('add_mcq').addEventListener('click', function() {
+    const container = document.createElement('div');
+    container.className = 'question-block relative p-4 border rounded-xl bg-green-50';
+    container.innerHTML = `
+        <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+        <label class="block text-sm font-medium text-gray-700 mb-1">MCQ Question</label>
+        <input type="text" name="mcq_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+        <input type="text" name="mcq_options_1[]" placeholder="Option 1" class="w-full px-3 py-2 border rounded mb-1">
+        <input type="text" name="mcq_options_2[]" placeholder="Option 2" class="w-full px-3 py-2 border rounded mb-1">
+        <input type="text" name="mcq_options_3[]" placeholder="Option 3" class="w-full px-3 py-2 border rounded mb-1">
+        <input type="text" name="mcq_options_4[]" placeholder="Option 4" class="w-full px-3 py-2 border rounded mb-2">
+        <input type="text" name="mcq_answers[]" placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+        <input type="number" name="mcq_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded">
+    `;
+    document.getElementById('questions_container').appendChild(container);
+    attachMarksListener(container);
+    updateTotalMarks();
+});
+
+// Add Short Answer
+document.getElementById('add_short').addEventListener('click', function() {
+    const container = document.createElement('div');
+    container.className = 'question-block relative p-4 border rounded-xl bg-purple-50';
+    container.innerHTML = `
+        <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Short Answer Question</label>
+        <input type="text" name="short_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+        <input type="text" name="short_correct_answer[]" placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+        <input type="number" name="short_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Type</label>
+        <select name="short_eval_types[]" class="w-full px-3 py-2 border rounded mb-2">
+            <option value="strict">Strict – Exact match expected</option>
+            <option value="flexible">Flexible – Allow slight variation</option>
+            <option value="keywords">Keywords – Check for key terms</option>
+            <option value="custom">Custom – Use custom rubric</option>
+        </select>
+        `;
+    document.getElementById('questions_container').appendChild(container);
+    attachMarksListener(container);
+    updateTotalMarks();
+});
+
+// Add Long Answer
+document.getElementById('add_long').addEventListener('click', function() {
+    const container = document.createElement('div');
+    container.className = 'question-block relative p-4 border rounded-xl bg-red-50';
+    container.innerHTML = `
+        <button type="button" onclick="removeBlock(this)" class="absolute top-2 right-2 text-xl">❌</button>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Long Answer Question</label>
+        <input type="text" name="long_questions[]" placeholder="Enter question..." class="w-full px-3 py-2 border rounded mb-2">
+        <input type="text" name="long_correct_answer[]" placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+        <input type="number" name="long_marks[]" placeholder="Marks" class="w-full px-3 py-2 border rounded">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Evaluation Type</label>
+        <select name="long_eval_types[]" class="w-full px-3 py-2 border rounded mb-2">
+            <option value="strict">Strict – Exact match expected</option>
+            <option value="flexible">Flexible – Allow slight variation</option>
+            <option value="keywords">Keywords – Check for key terms</option>
+            <option value="custom">Custom – Use custom rubric</option>
+        </select>
+    `;
+    document.getElementById('questions_container').appendChild(container);
+    attachMarksListener(container);
+    updateTotalMarks();
+});
+</script>
+{% endblock %}

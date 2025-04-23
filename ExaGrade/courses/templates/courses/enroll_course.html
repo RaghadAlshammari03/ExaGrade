@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-3xl font-bold text-[#1C304F]">Enroll in a Course</h1>
+<form method="POST" class="mt-4 bg-white p-6 shadow-md rounded-lg">
+    {% csrf_token %}
+    <label class="block text-gray-700 font-semibold">Enter 6-Digit Course Code:</label>
+    <input type="text" name="course_code" required class="mt-2 w-full px-4 py-2 border rounded-lg">
+    <button type="submit" class="mt-4 bg-[#1C304F] text-white px-6 py-2 rounded-lg hover:bg-[#98BBF5]">
+        Enroll
+    </button>
+</form>
+{% endblock %}

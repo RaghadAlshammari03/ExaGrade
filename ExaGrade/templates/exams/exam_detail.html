@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-3xl font-bold text-gray-800">{{ exam.name }}</h1>
+
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Questions</h2>
+
+        {% if questions %}
+            <ul class="mt-4">
+                {% for question in questions %}
+                    <li class="border-b py-3 flex justify-between">
+                        <span>{{ question.text }}</span>
+                        <div>
+                            <a href="{% url 'exams:edit_question' question.id %}" 
+                               class="text-blue-500 hover:underline">Edit</a>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 mt-2">No questions added yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="mt-4 flex gap-4">
+        <!-- Add Question Button -->
+        <a href="{% url 'exams:add_question' exam.id %}" 
+           class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
+            + Add Question
+        </a>
+
+        <!-- ✅ Download PDF Button -->
+        <a href="{% url 'exams:download_pdf' exam.id %}" 
+           class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+            📥 Download PDF
+        </a>
+    </div>
+    {% extends "base.html" %}
+{% block content %}
+<h2>{{ exam.title }}</h2>
+<a href="{% url 'take_electronic_exam' exam.pk %}">Take Exam</a>
+{% endblock %}
+
+</div>
+{% endblock %}

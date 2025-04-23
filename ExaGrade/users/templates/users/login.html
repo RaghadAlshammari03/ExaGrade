@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% if messages %}
+<div class="mb-4">
+    {% for message in messages %}
+    <div class="p-3 text-sm font-semibold rounded 
+                {% if message.tags == 'success' %} bg-green-500 text-white 
+                {% elif message.tags == 'error' %} bg-red-500 text-white 
+                {% elif message.tags == 'info' %} bg-blue-500 text-white 
+                {% else %} bg-gray-500 text-white {% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md mt-10">
+    <h2 class="text-2xl font-bold text-center text-[#1C304F]">Login</h2>
+    <form method="POST" class="mt-6">
+        {% csrf_token %}
+        
+        <div class="mb-4">
+            <label class="block text-gray-700">Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+                <p class="text-red-600 text-sm">{{ form.username.errors.as_text }}</p>
+            {% endif %}
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-700">Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}
+                <p class="text-red-600 text-sm">{{ form.password.errors.as_text }}</p>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="w-full bg-[#1C304F] text-white py-2 rounded-md mt-4 hover:bg-[#16253a]">Login</button>
+    </form>
+
+    <p class="mt-4 text-center text-gray-600">Don't have an account? <a href="{% url 'users:signup' %}" class="text-[#1C304F]">Sign up</a></p>
+</div>
+{% endblock %}

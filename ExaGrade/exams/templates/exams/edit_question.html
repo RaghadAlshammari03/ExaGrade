@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h2 class="text-2xl font-bold text-gray-800">Edit Question</h2>
+
+    <form method="POST" class="mt-4">
+        {% csrf_token %}
+        <div class="space-y-4">
+            {{ form.as_p }}
+        </div>
+        <div class="mt-4 flex space-x-4">
+            <button type="submit" 
+                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                Save Changes
+            </button>
+            <a href="{% url 'exams:detail' question.exam.id %}" 
+               class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

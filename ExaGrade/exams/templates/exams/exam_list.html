@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-3xl font-bold text-gray-800">Exams</h1>
+
+    <!-- Exam List -->
+    <div class="mt-4">
+        {% if exams %}
+            <table class="w-full border-collapse border border-gray-300">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="border px-4 py-2 text-left">Exam Name</th>
+                        <th class="border px-4 py-2 text-left">Status</th>
+                        <th class="border px-4 py-2 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exam in exams %}
+                        <tr class="border">
+                            <td class="border px-4 py-2">{{ exam.name }}</td>
+                            <td class="border px-4 py-2">
+                                {% if exam.status == "done" %}
+                                    <span class="text-green-500 font-semibold">Completed</span>
+                                {% elif exam.status == "progress" %}
+                                    <span class="text-yellow-500 font-semibold">In Progress</span>
+                                {% else %}
+                                    <span class="text-gray-500">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td class="border px-4 py-2">
+                                <a href="{% url 'exams:detail' exam.id %}" class="text-blue-500 hover:underline">View Details</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-gray-500 mt-4">No exams available.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

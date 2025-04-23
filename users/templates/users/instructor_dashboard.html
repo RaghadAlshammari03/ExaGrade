@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-9xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-4xl font-bold text-gray-800">Instructor Dashboard</h1>
+
+    <!-- Chart + Calendar Section -->
+<div class="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-10">
+    <!-- Chart Section -->
+    <div class="bg-white rounded-2xl p-6 shadow-md flex flex-col h-[550px]">
+        <div class="flex items-center gap-2 text-blue-600 mb-4">
+            <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
+            <h2 class="text-2xl font-semibold text-gray-800">Average Scores Per Exam</h2>
+        </div>
+
+        <!-- Filters -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="text-sm font-medium text-gray-700">Date Range</label>
+                <input type="text" id="dateRange" placeholder="Select range" class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-700">Course</label>
+                <select id="courseFilter" class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="all">All Courses</option>
+                    {% for course in courses %}
+                        <option value="{{ course.name }}">{{ course.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-700">Exam</label>
+                <select id="examFilter" class="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="all">All Exams</option>
+                    {% for exam in exams %}
+                    <option value="{% if exam.name %}{{ exam.name }}{% else %}{{ exam.title }}{% endif %}">
+                        {% if exam.name %}{{ exam.name }}{% else %}{{ exam.title }}{% endif %}
+                      </option>                       
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="flex-1">
+            <canvas id="avgScoreChart" class="w-full h-full"></canvas>
+        </div>
+    </div>
+
+    <!-- Calendar Section -->
+    <div class="bg-white rounded-2xl p-6 shadow-md flex flex-col h-[550px]">
+        <div class="flex items-center gap-2 text-amber-600 mb-4">
+            <i data-lucide="calendar-days" class="w-6 h-6"></i>
+            <h2 class="text-2xl font-semibold text-gray-800">Exam & Reminder Calendar</h2>
+        </div>
+        <div class="flex-1">
+            <div id="calendar" class="w-full h-full"></div>
+        </div>
+    </div>
+    </div>
+        <!--  Reminder Modal -->
+        <div id="reminderModal" class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">📝 Add Reminder</h2>
+            <input type="text" id="reminderTitle" placeholder="Enter reminder title..." 
+                class="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring focus:border-blue-400">
+            <textarea id="reminderNotes" placeholder="Optional notes..." 
+                class="w-full mt-3 border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring focus:border-blue-400 resize-none" rows="3">
+            </textarea>
+            <div class="mt-4 flex justify-end space-x-2">
+                <button onclick="closeReminderModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition">
+                Cancel
+                </button>
+                <button onclick="saveReminder()" 
+                        class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+                Save
+                </button>
+            </div>
+            </div>
+        </div>
+
+        <!-- 🔔 Reminder Badge -->
+        <div class="absolute top-6 right-6">
+            <div id="reminder-badge" class="hidden bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+                0
+            </div>
+        </div>
+
+        <!-- 🗑️ Delete Confirmation Modal -->
+        <div id="deleteReminderModal" class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">🗑️ Delete Reminder</h2>
+            <p class="text-gray-600">Are you sure you want to delete the reminder "<span id="deleteReminderTitle" class="font-semibold"></span>"?</p>
+            <div class="mt-6 flex justify-end space-x-2">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition">Cancel</button>
+                <button onclick="confirmDeleteReminder()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">Delete</button>
+            </div>
+            </div>
+    </div>
+
+    <!-- Courses Section -->
+    <div class="mt-10">
+        <h2 class="text-xl font-bold text-gray-800">Courses</h2>
+        {% if courses %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+            {% for course in courses %}
+            <div class="relative bg-white shadow-md rounded-lg p-5 hover:shadow-lg transition-all duration-300">
+                <div class="absolute left-0 top-0 h-full w-1.5 bg-amber-500 rounded-l-lg"></div>
+                <h2 class="text-xl font-bold text-[#1C304F]">{{ course.name }}</h2>
+                <p class="text-gray-600 mt-1 mb-2">{{ course.description|default:"No description provided." }}</p>
+                <p class="text-sm text-gray-500 mt-2">Enrolled: {{ course.students.count }} student{{ course.students.count|pluralize }}</p>
+                <a href="{% url 'courses:detail' course.id %}" class="mt-4 inline-block bg-[#1C304F] hover:bg-[#16263F] text-white px-4 py-2 rounded-lg text-sm font-semibold shadow">
+                    View Course
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 mt-4">You have not created any courses yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Exams Section -->
+<div class="mt-10">
+    <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <i data-lucide="list" class="w-5 h-5"></i> Exam Overview
+    </h2>
+
+    {% if exams %}
+    <div class="overflow-x-auto rounded-lg shadow border">
+        <table class="min-w-full bg-white text-sm" id="dashboardExamsTable">
+            <thead class="bg-gray-100 text-gray-700">
+                <tr>
+                    <th class="py-3 px-4 text-left">Exam</th>
+                    <th class="py-3 px-4 text-center">Course</th>
+                    <th class="py-3 px-4 text-center">Created</th>
+                    <th class="py-3 px-4 text-center">Status</th>
+                    <th class="py-3 px-4 text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exam in exams %}
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="py-3 px-4 font-semibold text-gray-800">
+                        {% if exam.name %}
+                            {{ exam.name }}
+                        {% elif exam.title %}
+                            {{ exam.title }}
+                        {% else %}
+                            Unknown Exam
+                        {% endif %}
+                    </td>                    
+                    <td class="py-3 px-4 text-gray-700 text-center">{{ exam.course.name }}</td>
+                    <td class="py-3 px-4 text-gray-600 text-center">{{ exam.created_at|date:"M d, Y - h:i A" }}</td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="px-3 py-1 text-sm font-semibold rounded-full text-white
+                            {% if exam.status == 'done' %} bg-green-500
+                            {% elif exam.status == 'progress' %} bg-yellow-500
+                            {% elif exam.status == 'pending' %} bg-gray-500
+                            {% elif exam.status == 'requires_attention' %} bg-red-600
+                            {% elif exam.status == 'new_papers_uploaded' %} bg-orange-500
+                            {% endif %}">
+                            {{ exam.get_status_display }}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <a href="{% url 'exams:detail' exam.id %}"
+                               class="text-blue-600 hover:underline text-sm flex items-center gap-1">
+                                <i data-lucide="eye" class="w-4 h-4"></i> View Details
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p class="text-gray-500 mt-4">No exams created yet.</p>
+    {% endif %}
+</div>
+
+</div>
+</div>
+
+
+{{ exam_data|json_script:"exam-data" }}
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+    let calendar;
+    let selectedDate = null;
+    
+    // Open modal
+    function openReminderModal(dateStr) {
+        selectedDate = dateStr;
+        document.getElementById("reminderModal").classList.remove("hidden");
+    }
+    
+    // Close modal
+    function closeReminderModal() {
+        document.getElementById("reminderModal").classList.add("hidden");
+        document.getElementById("reminderTitle").value = "";
+        document.getElementById("reminderNotes").value = "";
+    }
+    
+    // Save reminder to calendar + localStorage
+    function saveReminder() {
+        const title = document.getElementById("reminderTitle").value.trim();
+        const notes = document.getElementById("reminderNotes").value.trim();
+    
+        if (title && selectedDate) {
+            const reminder = {
+                title: title + " (Reminder)",
+                start: selectedDate,
+                color: "#f97316",
+                notes: notes
+            };
+            calendar.addEvent(reminder);
+    
+            const savedReminders = JSON.parse(localStorage.getItem("calendarReminders")) || [];
+            savedReminders.push(reminder);
+            localStorage.setItem("calendarReminders", JSON.stringify(savedReminders));
+    
+            updateBadge();
+        }
+        closeReminderModal();
+    }
+
+    // Update 🔔 reminder badge
+    function updateBadge() {
+        const today = new Date().toISOString().slice(0, 10);
+        const reminders = JSON.parse(localStorage.getItem("calendarReminders")) || [];
+        const count = reminders.filter(e => e.start === today).length;
+        const badge = document.getElementById("reminder-badge");
+        if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove("hidden");
+        } else {
+            badge.classList.add("hidden");
+        }
+    }
+    
+    document.addEventListener("DOMContentLoaded", function () {
+    const calendarEl = document.getElementById("calendar");
+    const rawData = JSON.parse(document.getElementById("exam-data").textContent || "[]");
+    const savedReminders = JSON.parse(localStorage.getItem("calendarReminders")) || [];
+
+    const allEvents = [
+        ...rawData.map(e => ({ ...e, color: "#2563eb" })),  
+        ...savedReminders                                  
+    ];
+
+    calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: "dayGridMonth",
+        height: 450,
+        editable: true,
+        eventStartEditable: true,
+        eventDurationEditable: false,
+        headerToolbar: {
+            left: "prev,next today",
+            center: "title",
+            right: "dayGridMonth,timeGridWeek"
+        },
+
+        dateClick: function (info) {
+            openReminderModal(info.dateStr);
+        },
+
+        eventClick: function (info) {
+            if (info.event.url) {
+                window.location.href = info.event.url;
+                info.jsEvent.preventDefault();
+            }
+        },
+
+        // ✅ Tooltip + Right-click delete + make exams uneditable
+        eventDidMount: function (info) {
+            if (info.event.url) {
+                info.event.setProp("editable", false);
+            }
+
+            if (info.event.title.includes("(Reminder)")) {
+                info.el.addEventListener("contextmenu", function (e) {
+                    e.preventDefault();
+                    openDeleteModal(info);
+                });
+            }
+
+            // 🧠 Tooltip on hover (above calendar)
+            const tooltip = document.createElement("div");
+            tooltip.className = "tooltip-box";
+            tooltip.innerHTML = `
+                <div class="bg-black text-white text-xs rounded px-2 py-1 shadow-lg z-50 max-w-[200px]">
+                    <strong>${info.event.title}</strong><br>
+                    ${info.event.extendedProps.notes || ""}
+                </div>
+            `;
+            tooltip.style.position = "absolute";
+            tooltip.style.display = "none";
+            tooltip.style.pointerEvents = "none";
+            tooltip.style.zIndex = 9999;
+
+            document.body.appendChild(tooltip);
+
+            info.el.addEventListener("mouseenter", function (e) {
+                tooltip.style.left = e.pageX + "px";
+                tooltip.style.top = (e.pageY - 60) + "px";
+                tooltip.style.display = "block";
+            });
+
+            info.el.addEventListener("mouseleave", function () {
+                tooltip.style.display = "none";
+            });
+        },
+
+        // ✅ Save new date for dragged reminders only
+        eventDrop: function (info) {
+            if (info.event.title.includes("(Reminder)")) {
+                let saved = JSON.parse(localStorage.getItem("calendarReminders")) || [];
+                const index = saved.findIndex(e =>
+                    e.title === info.event.title && e.start !== info.event.startStr
+                );
+
+                if (index !== -1) {
+                    saved[index].start = info.event.startStr;
+                    localStorage.setItem("calendarReminders", JSON.stringify(saved));
+                    updateBadge();
+                }
+            } else {
+                info.revert(); 
+            }
+        },
+
+        events: allEvents
+    });
+
+    calendar.render();
+    updateBadge();
+});
+
+    let deleteReminderInfo = null;
+
+    function openDeleteModal(info) {
+        deleteReminderInfo = info;
+        document.getElementById("deleteReminderTitle").textContent = info.event.title;
+        document.getElementById("deleteReminderModal").classList.remove("hidden");
+    }
+
+    function closeDeleteModal() {
+        deleteReminderInfo = null;
+        document.getElementById("deleteReminderModal").classList.add("hidden");
+    }
+
+    function confirmDeleteReminder() {
+        if (deleteReminderInfo) {
+        const { event } = deleteReminderInfo;
+        event.remove();
+
+        let saved = JSON.parse(localStorage.getItem("calendarReminders")) || [];
+        saved = saved.filter(e => e.title !== event.title || e.start !== event.startStr);
+        localStorage.setItem("calendarReminders", JSON.stringify(saved));
+        updateBadge();
+
+        closeDeleteModal();
+        }
+    }
+    
+document.addEventListener("DOMContentLoaded", function () {
+    const rawData = JSON.parse("{{ all_exam_data|escapejs }}");
+    let chartInstance = null;
+
+    const ctx = document.getElementById("avgScoreChart").getContext("2d");
+
+    // ✅ Init Flatpickr (with proper calendar)
+    flatpickr("#dateRange", {
+        mode: "range",
+        dateFormat: "Y-m-d",
+        defaultHour: 0,
+        altInput: true,
+        altFormat: "F j, Y"
+    });
+
+    // ✅ Update Chart Function
+    function updateChart(data) {
+        const labels = data.map(d => d.name);
+        const scores = data.map(d => d.score);
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Average Score',
+                    data: scores,
+                    backgroundColor: '#3b82f6',
+                    hoverBackgroundColor: '#2563eb',
+                    borderRadius: 8,
+                    barThickness: 45  // ✅ This controls bar WIDTH and visual height feel
+                }]
+            },
+            options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+        padding: 20
+    },
+    plugins: {
+        tooltip: {
+            backgroundColor: "#1C304F",
+            titleFont: { weight: 'bold' },
+            callbacks: {
+                label: function (context) {
+                    return `Score: ${context.parsed.y}`;
+                }
+            }
+        },
+        legend: { display: false }
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+                stepSize: 10,
+                color: "#1C304F",
+                font: { size: 12, weight: "500" }
+            },
+            title: {
+                display: true,
+                text: 'Score (%)',
+                color: "#1C304F",
+                font: { weight: "bold", size: 14 }
+            },
+            grid: {
+                color: "#E2E8F0"
+            }
+        },
+        x: {
+            ticks: {
+                color: "#1C304F",
+                font: { size: 12, weight: "500" }
+            },
+            title: {
+                display: true,
+                text: 'Exam Name',
+                color: "#1C304F",
+                font: { weight: "bold", size: 14 }
+            },
+            grid: {
+                display: false
+            }
+        }
+    }
+}
+        });
+    }
+
+    // ✅ Filtering logic
+    function applyFilters() {
+        const course = document.getElementById("courseFilter").value;
+        const exam = document.getElementById("examFilter").value;
+        const dateRange = document.getElementById("dateRange")._flatpickr?.selectedDates || [];
+
+        const filtered = rawData.filter(item => {
+        const matchCourse = course === "all" || item.course === course;
+        const matchExam = exam === "all" || item.name === exam;
+
+        const matchDate = !dateRange.length || (() => {
+            const itemDate = new Date(item.date);
+            const startDate = new Date(dateRange[0]);
+            const endDate = new Date(dateRange[1] ?? dateRange[0]);
+
+            // Strip time to compare just dates
+            itemDate.setHours(0, 0, 0, 0);
+            startDate.setHours(0, 0, 0, 0);
+            endDate.setHours(0, 0, 0, 0);
+
+            return itemDate >= startDate && itemDate <= endDate;
+        })();
+
+        return matchCourse && matchExam && matchDate;
+    });
+
+        updateChart(filtered);
+    }
+
+    document.getElementById("courseFilter").addEventListener("change", applyFilters);
+    document.getElementById("examFilter").addEventListener("change", applyFilters);
+    document.getElementById("dateRange").addEventListener("change", applyFilters);
+
+    updateChart(rawData);
+});
+
+    </script>
+  
+{% endblock %}
+ 

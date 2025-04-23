@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-white-50 py-10 px-4">
+  <div class="w-full max-w-4xl bg-white shadow-xl rounded-3xl p-8 space-y-6">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center border-b pb-4">
+      <h1 class="text-3xl font-bold text-gray-800">{{ exam.title }}</h1>
+
+      {% if exam.duration_minutes %}
+        <div class="text-sm text-white bg-red-600 px-4 py-2 rounded-full font-semibold shadow" id="timer">
+          ⏰ {{ exam.duration_minutes }}:00
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Fullscreen mood -->
+    <button onclick="toggleFullScreen()" class="text-sm bg-gray-800 text-white px-3 py-1 rounded-lg shadow hover:bg-black">
+      ⛶ Enter Fullscreen
+    </button>
+
+    <!-- Step Indicators -->
+    <div class="flex justify-center gap-2 mb-4" id="stepIndicators">
+      {% for question in questions %}
+        <div class="w-4 h-4 rounded-full bg-gray-300 transition" data-step="{{ forloop.counter0 }}"></div>
+      {% endfor %}
+    </div>
+
+    <!-- Form -->
+    <form id="examForm" method="post" action="{% url 'electronic_exams:take_exam' exam.pk %}" class="space-y-6">
+      {% csrf_token %}
+
+      {% for question in questions %}
+      <div class="question-box bg-gray-50 border p-5 rounded-xl shadow-md transition hidden" data-index="{{ forloop.counter0 }}">
+        <h2 class="font-semibold text-lg mb-2">
+          Question {{ forloop.counter }} of {{ questions|length }}
+        </h2>
+        <p class="text-gray-800 mb-4">{{ question.text }}</p>
+
+        {% if question.question_type == "MCQ" %}
+          {% for choice in question.choices.all %}
+            <label class="block">
+              <input type="radio" name="question_{{ question.id }}" value="{{ choice.text }}" class="mr-2">
+              {{ choice.text }}
+            </label>
+          {% endfor %}
+        {% elif question.question_type == "TF" %}
+          <label class="block"><input type="radio" name="question_{{ question.id }}" value="True" class="mr-2">True</label>
+          <label class="block"><input type="radio" name="question_{{ question.id }}" value="False" class="mr-2">False</label>
+        {% else %}
+          <textarea name="question_{{ question.id }}" class="w-full border rounded p-3 focus:ring focus:border-blue-400 resize-none" rows="5" placeholder="Write your answer here..."></textarea>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <!-- Navigation Buttons -->
+      <div class="flex justify-between mt-6">
+        <button type="button" id="prevBtn" class="hidden px-4 py-2 bg-gray-300 text-gray-700 rounded shadow">⬅ Previous</button>
+        <button type="button" id="nextBtn" class="px-4 py-2 bg-blue-600 text-white rounded shadow">Next ➡</button>
+        <button type="submit" id="submitBtn" class="hidden px-6 py-2 bg-green-600 text-white font-bold rounded shadow">✅ Submit</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="toast" class="fixed top-6 right-6 z-50 hidden px-4 py-3 bg-white text-gray-800 rounded-lg shadow-lg border border-blue-500 text-sm font-semibold"></div>
+
+<!-- Confirmation Modal -->
+<div id="confirmModal" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+    <h2 class="text-xl font-bold text-gray-800 mb-4">Submit Exam</h2>
+    <p class="text-gray-600 mb-6">Are you sure you want to submit your exam now?</p>
+    <div class="flex justify-end gap-4">
+      <button id="cancelConfirm" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded">Cancel</button>
+      <button id="confirmSubmit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold">Yes, Submit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showToast(message = "", duration = 3000) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+    toast.classList.add("opacity-100");
+
+    setTimeout(() => {
+      toast.classList.add("opacity-0");
+      setTimeout(() => toast.classList.add("hidden"), 300);
+    }, duration);
+  }
+
+  function showConfirmModal(callback) {
+    const modal = document.getElementById("confirmModal");
+    const confirmBtn = document.getElementById("confirmSubmit");
+    const cancelBtn = document.getElementById("cancelConfirm");
+
+    modal.classList.remove("hidden");
+
+    confirmBtn.onclick = () => {
+      modal.classList.add("hidden");
+      callback(true);
+    };
+    cancelBtn.onclick = () => {
+      modal.classList.add("hidden");
+      callback(false);
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const total = Number("{{ questions|length|default:0 }}");
+    const forwardOnly = "{{ exam.can_navigate|yesno:'false,true' }}" === "false";
+    const duration = parseInt("{{ exam.duration_minutes|default:0 }}") || 0;
+    
+    let current = 0;
+    const questions = document.querySelectorAll(".question-box");
+    const indicators = document.querySelectorAll("#stepIndicators div");
+    const nextBtn = document.getElementById("nextBtn");
+    const prevBtn = document.getElementById("prevBtn");
+    const submitBtn = document.getElementById("submitBtn");
+    const form = document.getElementById("examForm");
+
+    // Load draft answers from localStorage
+    let restoredDraft = false;
+    questions.forEach((q) => {
+      const inputs = q.querySelectorAll("input, textarea");
+      inputs.forEach(input => {
+        const key = `exam_{{ exam.id }}_user_{{ request.user.id }}_${input.name}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          if (input.type === "radio" && input.value === saved) {
+            input.checked = true;
+            restoredDraft = true;
+          } else if (input.tagName === "TEXTAREA") {
+            input.value = saved;
+            restoredDraft = true;
+          }
+        }
+      });
+    });
+
+    if (restoredDraft) {
+      setTimeout(() => showToast("💾 Restored saved answers"), 500);
+    }
+
+    function showQuestion(index) {
+      questions.forEach((q, i) => {
+        q.classList.add("hidden");
+        if (forwardOnly && i < index) {
+          q.querySelectorAll("input, textarea").forEach(input => input.disabled = true);
+        }
+      });
+
+      questions[index].classList.remove("hidden");
+
+      prevBtn.classList.toggle("hidden", forwardOnly || index === 0);
+      nextBtn.classList.toggle("hidden", index === total - 1);
+      submitBtn.classList.toggle("hidden", index !== total - 1);
+
+      const progressBar = document.getElementById("progressBar");
+        if (progressBar) {
+          progressBar.style.width = ((index + 1) / total * 100) + "%";
+        }
+
+      indicators.forEach((dot, i) => {
+        const inputs = questions[i].querySelectorAll("input, textarea");
+        let answered = false;
+
+        inputs.forEach(input => {
+          if ((input.type === "radio" && input.checked) || (input.tagName === "TEXTAREA" && input.value.trim())) {
+            answered = true;
+          }
+        });
+
+        dot.classList.remove("bg-blue-600", "scale-125", "bg-green-500", "bg-gray-300");
+
+        if (i === index) {
+          dot.classList.add("bg-blue-600", "scale-125");
+        } else {
+          dot.classList.add(answered ? "bg-green-500" : "bg-gray-300");
+        }
+      });
+    }
+
+    showQuestion(current);
+
+    nextBtn.onclick = () => {
+      if (forwardOnly) autoSave(current);
+      if (current < total - 1) current++;
+      showQuestion(current);
+    };
+
+    prevBtn.onclick = () => {
+      if (current > 0) current--;
+      showQuestion(current);
+    };
+
+    function autoSave(index) {
+      const box = questions[index];
+      const inputs = box.querySelectorAll("input, textarea");
+      inputs.forEach(input => {
+        const name = input.name;
+        const value = input.value;
+        if (value.trim()) {
+          fetch("{% url 'electronic_exams:ajax_save_answer' %}", {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": "{{ csrf_token }}",
+              "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: `${name}=${encodeURIComponent(value)}&exam_id={{ exam.pk }}`
+          });
+          const key = `exam_{{ exam.id }}_user_{{ request.user.id }}_${name}`;
+          localStorage.setItem(key, value);
+        }
+      });
+    }
+
+    function allQuestionsAnswered() {
+      const forwardOnly = "{{ exam.can_navigate|yesno:'false,true' }}" === "false";
+      if (forwardOnly) {
+        return true;
+      }
+
+      for (let i = 0; i < questions.length; i++) {
+        const inputs = questions[i].querySelectorAll("input, textarea");
+        let answered = false;
+        for (const input of inputs) {
+          if ((input.type === "radio" && input.checked) || (input.tagName === "TEXTAREA" && input.value.trim())) {
+            answered = true;
+            break;
+          }
+        }
+        if (!answered) {
+          showQuestion(i); 
+          showToast(`⚠️ You must answer Question ${i + 1} before submitting.`);
+          return false;
+        }
+      }
+      return true;
+    }
+
+    submitBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (allQuestionsAnswered()) {
+        showConfirmModal((confirmed) => {
+          if (confirmed) {
+            window.onbeforeunload = null;
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith(`exam_{{ exam.id }}_user_{{ request.user.id }}_`)) {
+                localStorage.removeItem(key);
+              }
+            });
+            form.submit();
+          }
+        });
+      }
+    });
+
+    window.onbeforeunload = function () {
+      return "⚠️ Are you sure you want to leave? Your progress may be lost.";
+    };
+
+    form.addEventListener("submit", () => {
+      window.onbeforeunload = null;
+    });
+
+    if (duration > 0) {
+      let totalSeconds = duration * 60;
+      const timerEl = document.getElementById("timer");
+
+      const countdown = setInterval(() => {
+        const min = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+        const sec = String(totalSeconds % 60).padStart(2, "0");
+        timerEl.textContent = `⏰ ${min}:${sec}`;
+        totalSeconds--;
+
+        if (totalSeconds === 60) {
+          timerEl.classList.remove("bg-red-600");
+          timerEl.classList.add("bg-yellow-400", "text-black");
+          showToast("⚠️ 1 minute left. Please review and submit.");
+        }
+
+        if (totalSeconds <= 10) {
+          timerEl.classList.remove("bg-yellow-400", "text-black");
+          timerEl.classList.add("bg-red-600", "animate-pulse");
+        }
+
+        if (totalSeconds < 0) {
+          clearInterval(countdown);
+          if (allQuestionsAnswered()) {
+            showConfirmModal((confirmed) => {
+              if (confirmed) {
+                window.onbeforeunload = null;
+                localStorage.clear();
+                form.submit();
+              }
+            });
+          } else {
+            showToast("⏰ Time's up! Submitting even with skipped questions.");
+            window.onbeforeunload = null;
+            localStorage.clear();
+            form.submit();
+          }
+        }
+      }, 1000);
+    }
+  });
+
+  function toggleFullScreen() {
+  const examBox = document.querySelector(".max-w-4xl"); 
+  if (!document.fullscreenElement) {
+    examBox.requestFullscreen().catch(err => {
+      alert(`⚠️ Fullscreen error: ${err.message}`);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+
+function autoSave(index) {
+  const box = questions[index];
+  const inputs = box.querySelectorAll("input, textarea");
+  inputs.forEach(input => {
+    const name = input.name;
+    const value = input.value;
+    if (value.trim()) {
+      fetch("/electronic-exams/ajax-save-answer/", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `${name}=${encodeURIComponent(value)}&exam_id={{ exam.pk }}`
+      }).then(() => {
+        showToast("💾 Saved");
+      });
+
+      localStorage.setItem(name, value);
+    }
+  });
+}
+
+document.addEventListener("visibilitychange", function () {
+  if (document.hidden) {
+    showToast("⚠️ Do not switch tabs! This may flag your submission.");
+  }
+});
+
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    showToast("⚠️ Fullscreen mode exited. Please stay in fullscreen.");
+  }
+});
+
+
+document.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    showToast("⚠️ Right-click is disabled during the exam.");
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (
+      (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J")) || 
+      (e.ctrlKey && e.key === "U") || 
+      (e.key === "F12")
+    ) {
+      e.preventDefault();
+      showToast("⚠️ Inspecting the page is disabled.");
+    }
+  });
+
+  document.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    showToast("⚠️ Right-click is disabled during the exam.");
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey && e.shiftKey && ["I", "J"].includes(e.key)) ||
+        (e.ctrlKey && e.key === "U") || e.key === "F12") {
+      e.preventDefault();
+      showToast("⚠️ Inspecting the page is disabled.");
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      showToast("⚠️ Do not switch tabs! This may flag your submission.");
+    }
+  });
+
+  window.addEventListener("offline", () => {
+    showToast("🚫 You are offline. Answers will not be saved!");
+  });
+  window.addEventListener("online", () => {
+    showToast("✅ Internet reconnected.");
+  });
+
+  window.onbeforeunload = () => {
+    return "⚠️ Are you sure you want to leave? Your progress may be lost.";
+  };
+
+</script>
+
+  
+  <style>
+    #toast {
+      transition: all 0.4s ease-in-out;
+    }
+    .animate-pulse {
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #toast {
+      transition: all 0.4s ease-in-out;
+    }
+    </style>
+
+<noscript>
+  <style>
+    #examForm { display: none !important; }
+  </style>
+  <div class="fixed top-0 left-0 w-full bg-red-600 text-white text-center font-bold py-3 z-50">
+    ⚠️ JavaScript is required to take this exam. Please enable JavaScript and reload the page.
+  </div>
+</noscript>
+
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center h-screen bg-gray-100">
+    <h1 class="text-4xl font-extrabold text-gray-900">Welcome to <span class="text-blue-600">ExaGrade</span></h1>
+    <p class="text-gray-600 mt-2 text-lg">An AI-powered grading system to simplify exam evaluations.</p>
+    
+    <div class="mt-6 flex space-x-4">
+        <a href="{% url 'users:signup' %}" class="px-6 py-3 bg-blue-500 text-white rounded-lg text-lg shadow-md hover:bg-blue-600 transition">
+            Get Started
+        </a>
+        <a href="{% url 'users:login' %}" class="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg text-lg shadow-md hover:bg-gray-400 transition">
+            Login
+        </a>
+    </div>
+</div>
+{% endblock %}

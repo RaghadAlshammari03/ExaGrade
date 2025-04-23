@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Take Exam: {{ exam.title }}</h2>
+<form method="post">
+    {% csrf_token %}
+    {% for question in exam.questions.all %}
+        <p>{{ question.text }}</p>
+        {% if question.question_type == "MCQ" %}
+            {% for choice in question.choices.all %}
+                <label><input type="radio" name="q{{ question.id }}" value="{{ choice.id }}"> {{ choice.text }}</label>
+            {% endfor %}
+        {% elif question.question_type == "TF" %}
+            <label><input type="radio" name="q{{ question.id }}" value="True"> True</label>
+            <label><input type="radio" name="q{{ question.id }}" value="False"> False</label>
+        {% else %}
+            <textarea name="q{{ question.id }}"></textarea>
+        {% endif %}
+    {% endfor %}
+    <button type="submit">Submit</button>
+</form>
+{% endblock %}

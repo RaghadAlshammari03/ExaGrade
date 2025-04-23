@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <h1 class="text-3xl font-bold text-gray-800">Student Dashboard</h1>
+
+    <!-- Enrolled Courses -->
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Enrolled Courses</h2>
+        {% if enrolled_courses %}
+            <ul class="mt-4">
+                {% for course in enrolled_courses %}
+                    <li class="border-b py-3 flex justify-between">
+                        <a href="{% url 'courses:detail' course.id %}" class="text-blue-500 hover:underline">
+                            {{ course.name }}
+                        </a>
+                        <span class="text-gray-500">Instructor: {{ course.instructor.username }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 mt-2">You are not enrolled in any courses.</p>
+        {% endif %}
+    </div>
+
+    <!-- Exam Grades -->
+    <div class="mt-6">
+        <h2 class="text-xl font-bold text-gray-800">Your Grades</h2>
+        {% if grades %}
+            <table class="mt-4 w-full border">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="py-2 px-4 text-left">Exam</th>
+                        <th class="py-2 px-4 text-left">Grade</th>
+                        <th class="py-2 px-4 text-left">Feedback</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grade in grades %}
+                        <tr class="border-b">
+                            <td class="py-2 px-4">{{ grade.exam.name }}</td>
+                            <td class="py-2 px-4 font-semibold">{{ grade.grade }}</td>
+                            <td class="py-2 px-4">{{ grade.feedback }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-gray-500 mt-2">No grades available yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,888 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-b from-white-100 to-white flex justify-center px-6 py-10">
+    <div class="w-full max-w-8xl flex gap-6">
+
+        <!-- 📝 Main Exam Section -->
+        <div class="flex-1 bg-white shadow-xl rounded-3xl p-8 transition-all">
+
+            <!-- Exam Title + Status + Actions -->
+            <div class="flex justify-between flex-wrap gap-4 items-start mb-8">
+                <div>
+                    <h1 class="text-4xl font-extrabold text-gray-900">{{ exam.title }}</h1>
+                    <div class="flex items-center gap-3 mt-2">
+                        <!-- Status Badge -->
+                        <span id="statusLabel" class="text-sm font-semibold px-3 py-1 rounded-full 
+                            {% if exam.is_active %} bg-green-100 text-green-700 
+                            {% else %} bg-gray-200 text-gray-500 
+                            {% endif %}">
+                            {{ exam.is_active|yesno:"Active,Disabled" }}
+                        </span>
+
+                        <!-- Toggle -->
+                        <label class="switch">
+                            <input type="checkbox" id="toggleExam" {% if exam.is_active %}checked{% endif %}>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Send Grades -->
+                <button type="button"
+                        onclick="openSendGradesModal()"
+                        {% if students_data|length == 0 %}
+                            disabled
+                            class="inline-flex items-center gap-2 bg-blue-300 cursor-not-allowed text-white px-4 py-2 rounded-xl shadow text-sm font-semibold opacity-60"
+                            title="No student submissions to send"
+                        {% else %}
+                            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow text-sm font-semibold"
+                        {% endif %}>
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    Send Grades
+                </button>
+            </div>
+
+            <!-- Exam Info Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <!-- Course -->
+                <div class="bg-gray-50 rounded-xl border p-4 flex items-center gap-3">
+                    <i data-lucide="book-open" class="w-5 h-5 text-gray-500"></i>
+                    <div>
+                        <p class="text-xs text-gray-500 font-semibold uppercase">Course</p>
+                        <p class="text-sm font-medium text-gray-700">{{ exam.course.name }}</p>
+                    </div>
+                </div>
+
+                <!-- Duration -->
+                <div class="bg-gray-50 rounded-xl border p-4 flex items-center gap-3">
+                    <i data-lucide="clock" class="w-5 h-5 text-gray-500"></i>
+                    <div>
+                        <p class="text-xs text-gray-500 font-semibold uppercase">Duration</p>
+                        <p class="text-sm font-medium text-gray-700">{{ exam.duration_minutes|default:"Not Set" }} min</p>
+                    </div>
+                </div>
+
+                <!-- Total Marks -->
+                <div class="bg-gray-50 rounded-xl border p-4 flex items-center gap-3">
+                    <i data-lucide="percent" class="w-5 h-5 text-gray-500"></i>
+                    <div>
+                        <p class="text-xs text-gray-500 font-semibold uppercase">Total Marks</p>
+                        <p class="text-sm font-medium text-gray-700">{{ exam.total_marks }}</p>
+                    </div>
+                </div>
+
+                <!-- Students Taken -->
+                <div class="bg-gray-50 rounded-xl border p-4 flex items-center gap-3">
+                    <i data-lucide="users" class="w-5 h-5 text-gray-500"></i>
+                    <div>
+                        <p class="text-xs text-gray-500 font-semibold uppercase">Students Taken</p>
+                        <p class="text-sm font-medium text-gray-700">
+                            {% if exam.student_responses.count > 0 %}
+                                {{ exam.student_responses.count }}
+                            {% else %}
+                                None
+                            {% endif %}
+                        </p>                        
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-8">
+                <div class="flex flex-wrap gap-4 items-center">
+                    <!-- Edit Exam -->
+                    <a href="{% url 'electronic_exams:edit_exam' exam.pk %}" 
+                    class="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-lg shadow text-sm font-semibold transition">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i> Edit
+                    </a>
+
+                    <!-- Preview Exam -->
+                    <button id="previewExamBtn" 
+                            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg shadow text-sm font-semibold transition">
+                        <i data-lucide="eye" class="w-4 h-4"></i> Preview
+                    </button>
+
+                    <!-- Grade/Regrade -->
+                    <form id="gradeExamForm" method="POST" action="{% url 'electronic_exams:grade_exam' exam.pk %}">
+                        {% csrf_token %}
+                        <button id="gradeBtn" type="submit"
+                        {% if students_data|length == 0 %}disabled{% endif %}
+                            class="inline-flex items-center gap-2 px-5 py-2 rounded-lg shadow text-sm font-semibold transition text-white
+                            {% if students_data|length == 0 %}
+                                bg-gray-400 opacity-60 cursor-not-allowed
+                            {% elif grading_button_text == 'Regrade All' %}
+                                bg-yellow-600 hover:bg-yellow-700
+                            {% else %}
+                                bg-indigo-600 hover:bg-indigo-700
+                            {% endif %}"
+                            title="{% if students_data|length == 0 %}No student responses available to grade{% endif %}">
+                          <i class="w-4 h-4" data-lucide="{% if grading_button_text == 'Regrade All' %}refresh-cw{% else %}check-circle{% endif %}"></i>
+                          {{ grading_button_text }}
+                        </button>
+                      </form>                                                        
+                </div>
+            </div>
+
+            <!-- Exam Questions (Preview Mode) -->
+            <div id="exam_preview" class="hidden mt-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="list" class="w-6 h-6 text-gray-600"></i> Exam Questions
+                </h2>
+                <div class="space-y-4">
+                    {% for question in exam.questions.all %}
+                        <div class="bg-gray-50 p-4 rounded-lg shadow-md border-l-4 {% if question.question_type == 'MCQ' %}border-blue-500{% elif question.question_type == 'TF' %}border-green-500{% else %}border-yellow-500{% endif %}">
+                            <p class="text-lg font-medium">{{ question.text }}</p>
+                            <p class="text-gray-500 text-sm">Marks: <span class="font-semibold">{{ question.marks }}</span></p>
+
+                            {% if question.question_type == "MCQ" %}
+                                <ul class="mt-2 space-y-1">
+                                    {% for choice in question.choices.all %}
+                                        <li class="{% if choice.is_correct %}text-green-600 font-semibold{% endif %}">
+                                            <i data-lucide="chevron-right" class="inline-block w-4 h-4 mr-1"></i>{{ choice.text }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Student Performance Overview -->
+            <div class="mt-12 w-full">
+                <h2 class="text-2xl font-semibold text-gray-800 flex items-center gap-2">
+                <i data-lucide="bar-chart" class="w-6 h-6"></i> Student Performance Overview
+                </h2>
+            
+                <!-- Chart Card -->
+                <div class="bg-gray-50 rounded-xl p-6 shadow-md border mt-4">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-500"></i> Grade Distribution
+                </h2>
+                <div class="w-full h-[400px]">
+                    <canvas id="gradesDistributionChart" class="w-full h-full"></canvas>
+                </div>
+                </div>
+            
+                <!-- Table & Filters -->
+                <div class="mt-10">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <!-- Search -->
+                    <input id="searchInput" type="text" placeholder="Search by name or ID..." class="border border-gray-300 px-3 py-1.5 rounded-md text-sm focus:ring focus:border-blue-400" />
+            
+                    <!-- Filter by Status -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <label for="badgeFilterDropdown" class="text-sm font-medium text-gray-700">Filter:</label>
+                            <select id="badgeFilterDropdown" onchange="applyBadgeFilter()"
+                                class="border border-gray-300 px-3 py-1.5 rounded-md text-sm text-gray-700 focus:ring focus:border-blue-400">
+                                <option value="all">All Statuses</option>
+                                <option value="⚠️ Requires Attention">⚠️ Requires Attention</option>
+                            </select>
+                        </div>
+                    
+                        <p id="attentionCount" class="text-sm text-red-600 font-medium hidden ml-1">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 inline-block mr-1"></i>
+                            <span></span> student(s) require attention
+                        </p>
+                    </div>        
+                </div>
+            
+                <!-- Performance Table -->
+                <div class="overflow-x-auto border shadow rounded-lg">
+                    <table id="performanceTable" class="min-w-full bg-white text-sm text-left">
+                    <thead class="bg-gray-100 text-gray-700">
+                        <tr>
+                        <th class="py-3 px-4 text-center">Name</th>
+                        <th class="py-3 px-4 text-center">ID</th>
+                        <th class="py-3 px-4 text-center">Grade</th>
+                        <th class="py-3 px-4 text-center">AI Feedback</th>
+                        <th class="py-3 px-4 text-center">Instructor Feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in students_data %}
+                        <tr class="border-t hover:bg-gray-50">
+                            <td class="py-3 px-4 text-gray-800 text-center">
+                                <div class="inline-flex items-center justify-center gap-2">
+                                    {{ s.student.get_full_name|default:s.student.username }}
+                                    {% if s.requires_attention %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
+                                            ⚠️ Requires Attention
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-gray-600 text-center">{{ s.student.student_id|default:"—" }}</td>
+                            <td class="py-3 px-4 text-center grade-cell">
+                                <div id="staticScore-{{ s.id }}" class="flex items-center justify-center">
+                                    <p class="flex items-center justify-center gap-1">
+                                        <span>{{ s.score }}/{{ exam.total_marks }}</span>
+                                        {% if s.score_override %}
+                                        <span class="text-xs text-yellow-600">(Manual)</span>
+                                        {% endif %}
+                                      </p>                                                                           
+                                  <button onclick="toggleScoreEdit('{{ s.id }}')" class="text-blue-600 hover:text-blue-800 ml-2" title="Edit Score">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                  </button>
+                                </div>
+                               
+                                <div id="scoreEditBox-{{ s.id }}" class="hidden mt-2 space-y-2">
+                                  <input id="scoreInput-{{ s.id }}" type="number" step="0.01"
+                                         data-id="{{ s.id }}" data-max="{{ exam.total_marks }}"
+                                         class="text-sm border px-2 py-1 rounded w-24 score-override"
+                                         oninput="limitScoreInput(this)">
+                                  
+                                  <p class="text-xs text-red-500 error-message hidden">Score must be between 0 and {{ exam.total_marks }}</p>
+                              
+                                  <div class="flex gap-2 justify-center">
+                                    <button onclick="submitScoreOverride('{{ s.id }}')" class="bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700">
+                                      Save
+                                    </button>
+                                    <button onclick="toggleScoreEdit('{{ s.id }}')" class="text-sm text-gray-600 hover:text-red-600">Cancel</button>
+                                    <span id="scoreConfirm-{{ s.id }}" class="text-green-600 text-sm hidden">✅ Saved</span>
+                                  </div>
+                                </div>
+                              </td>                                                                                         
+                            <td class="py-3 px-4 text-center align-middle">
+                                <div class="flex justify-center">
+                                  <button onclick="openFeedbackModal('{{ s.student_id }}')"
+                                      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 text-sm font-medium rounded-lg shadow flex items-center gap-2">
+                                    <i data-lucide="message-circle" class="w-4 h-4"></i> View Feedback
+                                  </button>
+                                </div>
+                              </td>                                                            
+                              <td class="py-3 px-4 text-sm text-gray-700 max-w-xs">
+                                <div id="staticFeedback-{{ s.id }}" class="flex items-center justify-center">
+                                  <p class="truncate max-w-[220px]">{{ s.manual_feedback|default:"—" }}</p>
+                                  <button onclick="toggleFeedbackEdit('{{ s.id }}')" class="text-blue-600 hover:text-blue-800 ml-3" title="Edit Feedback">
+                                    <i data-lucide="edit" class="w-4 h-4"></i>
+                                  </button>
+                                </div>
+                              
+                                <div id="feedbackEditBox-{{ s.id }}" class="hidden space-y-2">
+                                  <textarea id="feedbackInput-{{ s.id }}" class="border px-3 py-1.5 rounded w-full text-sm resize-none focus:ring focus:border-blue-500 transition" rows="2" placeholder="Write feedback...">{{ s.manual_feedback }}</textarea>
+                                  <div class="flex items-center gap-2">
+                                    <button onclick="submitInstructorFeedback('{{ s.id }}')" class="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700">
+                                      <i data-lucide="save" class="w-4 h-4"></i> Save
+                                    </button>
+                                    <button onclick="clearInstructorFeedback('{{ s.id }}')" class="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm">
+                                      <i data-lucide="eraser" class="w-4 h-4"></i> Clear
+                                    </button>
+                                    <button onclick="toggleFeedbackEdit('{{ s.id }}')" class="text-xs text-gray-600 hover:text-red-500">Cancel</button>
+                                    <span id="feedbackConfirm-{{ s.id }}" class="text-green-600 text-sm hidden">✅</span>
+                                  </div>
+                                </div>
+                              </td>                                                          
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>                
+    </div>
+</div>
+
+    <!-- Top-Right Toast -->
+    <div id="toast"
+        {% if messages %}
+            data-message="{{ messages.0|escapejs }}"
+        {% endif %}
+        class="fixed top-6 right-6 hidden bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium z-50 transition-opacity duration-500">
+    </div>
+</div>
+
+<div id="feedbackModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white w-full max-w-3xl rounded-xl p-6 shadow-xl relative">
+      <button onclick="closeFeedbackModal()" class="absolute top-3 right-4 text-gray-400 hover:text-red-600">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+  
+      <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <i data-lucide="message-circle" class="w-5 h-5 text-blue-600"></i>
+        AI Feedback
+      </h2>
+  
+      <div id="feedbackContent" class="space-y-4 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+  </div>
+
+  
+<div id="sendGradesModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 relative">
+      <button onclick="closeSendGradesModal()" class="absolute top-3 right-4 text-gray-500 hover:text-red-500">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+  
+      <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <i data-lucide="send" class="w-5 h-5 text-blue-600"></i> Send Results to Students
+      </h2>
+  
+      <form method="POST" action="{% url 'electronic_exams:send_grades' exam.pk %}">
+        {% csrf_token %}
+  
+        <div class="mb-4 space-y-2">
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="send_options" value="grade" class="text-blue-600" checked>
+            Include Grade
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="send_options" value="ai-feedback" class="text-blue-600" checked>
+            Include AI Feedback
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="send_options" value="instructor-feedback" class="text-blue-600" checked>
+            Include Instructor Feedback
+          </label>
+        </div>
+  
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" onclick="closeSendGradesModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-2">
+            <i data-lucide="send" class="w-4 h-4"></i> Send Now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Preline Loading Modal for Grading -->
+<div id="progressModal" class="hs-overlay hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center">
+      <div class="mx-auto animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
+      <h3 id="progressTitle" class="text-xl font-bold text-gray-800">Processing...</h3>
+      <p id="progressCount" class="text-sm text-gray-600 mt-2">0 / 0</p>
+    </div>
+  </div>
+  
+<!-- JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+    const toast = document.getElementById("toast");
+    const msg = toast.dataset.message;
+    
+    if (msg) {
+        toast.textContent = msg;
+        toast.classList.remove("hidden");
+        toast.classList.add("opacity-100");
+
+        setTimeout(() => {
+            toast.classList.remove("opacity-100");
+            toast.classList.add("opacity-0");
+            setTimeout(() => toast.classList.add("hidden"), 500);
+        }, 3000);
+    }
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+    const toggleExam = document.getElementById("toggleExam");
+    const statusLabel = document.getElementById("statusLabel");
+    const previewBtn = document.getElementById("previewExamBtn");
+    const examPreview = document.getElementById("exam_preview");
+    const toast = document.getElementById("toast");
+
+    if (toggleExam) {
+        toggleExam.addEventListener("change", function () {
+            const isActive = this.checked;
+            fetch("{% url 'electronic_exams:toggle_exam' exam.pk %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ status: isActive })
+            }).then(() => {
+                statusLabel.textContent = isActive ? "Active" : "Disabled";
+                statusLabel.className = "text-sm font-semibold " + (isActive ? "text-green-600" : "text-red-600");
+
+                toast.textContent = `Exam is now ${isActive ? 'enabled' : 'disabled'}`;
+                toast.classList.remove("hidden");
+                toast.classList.add("opacity-100");
+                setTimeout(() => {
+                    toast.classList.remove("opacity-100");
+                    toast.classList.add("opacity-0");
+                    setTimeout(() => toast.classList.add("hidden"), 500);
+                }, 3000);
+            });
+        });
+    }
+
+    if (previewBtn) {
+        previewBtn.addEventListener("click", () => {
+            examPreview.classList.toggle("hidden");
+        });
+    }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    // Score Override
+    document.querySelectorAll(".score-override").forEach(input => {
+        input.addEventListener("change", () => {
+            const id = input.dataset.id;
+            fetch(`/electronic-exams/override-score/${id}/`, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: `score=${input.value}`
+            });
+        });
+    });
+
+    // Regrade
+    document.querySelectorAll(".regrade-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const id = btn.dataset.id;
+            fetch(`/electronic-exams/regrade/${id}/`, {
+                method: "POST",
+                headers: { "X-CSRFToken": "{{ csrf_token }}" }
+            }).then(() => location.reload());
+        });
+    });
+
+    // Flag for Review
+    document.querySelectorAll(".flag-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const id = btn.dataset.id;
+            fetch(`/electronic-exams/toggle-flag/${id}/`, {
+                method: "POST",
+                headers: { "X-CSRFToken": "{{ csrf_token }}" }
+            }).then(() => location.reload());
+        });
+    });
+});
+
+function toggleFeedbackEdit(responseId) {
+    document.getElementById("staticFeedback-" + responseId).classList.toggle("hidden");
+    document.getElementById("feedbackEditBox-" + responseId).classList.toggle("hidden");
+}
+
+function submitInstructorFeedback(responseId) {
+    const feedback = document.getElementById("feedbackInput-" + responseId).value;
+
+    const url = "{% url 'electronic_exams:save_feedback' 0 %}".replace("/0/", `/${responseId}/`);
+
+    fetch(url, {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": '{{ csrf_token }}',
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `feedback=${encodeURIComponent(feedback)}`
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelector(`#staticFeedback-${responseId} p`).innerText = feedback || "—";
+            document.getElementById("feedbackEditBox-" + responseId).classList.add("hidden");
+            document.getElementById("staticFeedback-" + responseId).classList.remove("hidden");
+            const confirm = document.getElementById("feedbackConfirm-" + responseId);
+            confirm.textContent = "✅ Saved";
+            confirm.classList.remove("hidden");
+            setTimeout(() => confirm.classList.add("hidden"), 2000);
+        } else {
+            alert("❌ Failed to save feedback");
+        }
+    });
+}
+
+function clearInstructorFeedback(responseId) {
+    document.getElementById("feedbackInput-" + responseId).value = "";
+    submitInstructorFeedback(responseId);
+}
+
+    document.getElementById("searchInput").addEventListener("input", function () {
+        const query = this.value.toLowerCase();
+        document.querySelectorAll("#performanceTable tbody tr").forEach(row => {
+            const name = row.querySelector(".student-name").textContent.toLowerCase();
+            const id = row.querySelector(".student-id").textContent.toLowerCase();
+            row.style.display = name.includes(query) || id.includes(query) ? "" : "none";
+        });
+    });
+
+
+    document.addEventListener("DOMContentLoaded", function () {
+    const rawData = JSON.parse('{{ grade_chart_data|escapejs }}');
+
+    const labels = rawData.map(d => d.name);
+    const scores = rawData.map(d => d.score);  
+    const backgroundColors = rawData.map(scoreObj => {
+        if (scoreObj.score >= 85) return "#16a34a";  // green
+        if (scoreObj.score >= 60) return "#facc15";  // yellow
+        return "#ef4444";                            // red
+    });
+
+    const ctx = document.getElementById("gradesDistributionChart").getContext("2d");
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Score',
+                data: scores,
+                backgroundColor: backgroundColors,
+                borderRadius: 6,
+                barThickness: 30
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: 20 },
+            plugins: {
+                tooltip: {
+                    backgroundColor: "#1C304F",
+                    titleFont: { weight: 'bold' },
+                    callbacks: {
+                        label: ctx => `Score: ${ctx.parsed.y}`
+                    }
+                },
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: parseFloat("{{ exam.total_marks|default:100 }}"),
+                    ticks: {
+                        stepSize: 10,
+                        color: "#1C304F",
+                        font: { size: 12, weight: "500" }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Score',
+                        color: "#1C304F",
+                        font: { weight: "bold", size: 14 }
+                    },
+                    grid: { color: "#E2E8F0" }
+                },
+                x: {
+                    ticks: {
+                        color: "#1C304F",
+                        font: { size: 12, weight: "500" }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Student',
+                        color: "#1C304F",
+                        font: { weight: "bold", size: 14 }
+                    },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+});
+
+function toggleScoreEdit(responseId) {
+  document.getElementById("staticScore-" + responseId).classList.toggle("hidden");
+  document.getElementById("scoreEditBox-" + responseId).classList.toggle("hidden");
+}
+
+function limitScoreInput(input) {
+  const max = parseFloat(input.dataset.max);
+  const value = parseFloat(input.value);
+
+  if (isNaN(value)) return;
+
+  if (value > max) input.value = max;
+  else if (value < 0) input.value = 0;
+}
+
+function submitScoreOverride(responseId) {
+  const input = document.getElementById("scoreInput-" + responseId);
+  const score = input.value.trim();
+  const max = parseFloat(input.dataset.max);
+  const errorMsg = input.parentElement.querySelector(".error-message");
+
+  const scoreFloat = parseFloat(score);
+
+  if (score === "" || isNaN(scoreFloat) || scoreFloat < 0 || scoreFloat > max) {
+    errorMsg.classList.remove("hidden");
+    return;
+  }
+
+  errorMsg.classList.add("hidden");
+
+  const url = "{% url 'electronic_exams:override_score' 0 %}".replace("0", responseId);
+
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": "{{ csrf_token }}",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: `score=${encodeURIComponent(scoreFloat)}`
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      document.querySelector(`#staticScore-${responseId} p`).innerHTML = `
+        <span>${scoreFloat} / {{ exam.total_marks }}</span>
+        <span class="text-xs text-yellow-600">(Manual)</span>
+      `;
+      toggleScoreEdit(responseId);
+      const confirm = document.getElementById("scoreConfirm-" + responseId);
+      confirm.classList.remove("hidden");
+      setTimeout(() => confirm.classList.add("hidden"), 2000);
+    } else {
+      errorMsg.textContent = "❌ Failed to save score.";
+      errorMsg.classList.remove("hidden");
+    }
+  });
+}
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("gradeExamForm");
+    const btn = document.getElementById("gradeBtn");
+    const statusLabel = document.getElementById("statusLabel");
+
+    form?.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const total = Number("{{ students.count|add:0 }}");
+    showProgressModal("Grading Electronic Exam with AI...", total);
+
+        fetch(form.action, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": "{{ csrf_token }}",
+                "X-Requested-With": "XMLHttpRequest"
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                let done = 0;
+                const interval = setInterval(() => {
+                    updateProgressModal(++done);
+                    if (done >= total) {
+                        clearInterval(interval);
+                        showToast("✅ Grading Complete!");
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                }, 120);
+            } else {
+                alert("❌ Grading failed");
+                closeProgressModal();
+            }
+        })
+        .catch(() => {
+            alert("❌ Grading request failed");
+            closeProgressModal();
+        });
+    });
+});
+
+function applyBadgeFilter() {
+    const filterValue = document.getElementById("badgeFilterDropdown").value.trim();
+    const rows = document.querySelectorAll("#performanceTable tbody tr");
+    const attentionCount = document.getElementById("attentionCount");
+    let count = 0;
+
+    rows.forEach(row => {
+        const badge = row.querySelector(".student-name span");
+        const badgeText = badge ? badge.textContent.trim() : "";
+
+        if (filterValue === "all") {
+            row.style.display = "";
+        } else if (badgeText === filterValue) {
+            row.style.display = "";
+            count++;
+        } else {
+            row.style.display = "none";
+        }
+    });
+
+    if (filterValue === "⚠️ Requires Attention") {
+        attentionCount.classList.remove("hidden");
+        attentionCount.querySelector("span").textContent = count;
+    } else {
+        attentionCount.classList.add("hidden");
+    }
+}
+
+
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("gradeExamForm");
+  const btn = document.getElementById("gradeBtn");
+  const statusLabel = document.getElementById("statusLabel");
+
+  form?.addEventListener("submit", function (e) {
+    e.preventDefault();
+    btn.disabled = true;
+    lucide.createIcons();
+
+    const total = Number("{{ students_data|length|default:0 }}");
+    showProgressModal("Grading Electronic Exam with AI...", total);
+
+    fetch(form.action, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": "{{ csrf_token }}",
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          let done = 0;
+          const interval = setInterval(() => {
+            updateProgressModal(++done);
+            if (done >= total) {
+              clearInterval(interval);
+              showToast("✅ Grading Complete!");
+              setTimeout(() => location.reload(), 1500);
+            }
+          }, 120);
+        } else {
+          alert("❌ Grading failed");
+          btn.innerHTML = `Try Again`;
+          btn.disabled = false;
+          closeProgressModal();
+        }
+      })
+      .catch(() => {
+        alert("❌ Grading request failed");
+        btn.innerHTML = `Try Again`;
+        btn.disabled = false;
+        closeProgressModal();
+      });
+  });
+});
+
+function openSendGradesModal() {
+  document.getElementById("sendGradesModal").classList.remove("hidden");
+}
+function closeSendGradesModal() {
+  document.getElementById("sendGradesModal").classList.add("hidden");
+}
+
+const feedbackMap = JSON.parse('{{ students_data_json|safe|escapejs }}');
+
+function openFeedbackModal(studentId) {
+  const student = feedbackMap.find(s => s.student_id.toString() === studentId.toString());
+  if (!student) return;
+
+  const feedbackContent = document.getElementById("feedbackContent");
+  const modal = document.getElementById("feedbackModal");
+
+  const blocks = student.graded_questions.map(q => {
+  let borderColor = "border-yellow-500"; 
+  if (q.type === "MCQ") borderColor = "border-blue-500";
+  else if (q.type === "TF") borderColor = "border-green-500";
+
+  return `
+    <div class="bg-gray-50 border-l-4 p-4 rounded-lg shadow-md ${borderColor}">
+      <p class="text-md font-semibold text-gray-800">Q: ${q.question}</p>
+      <p class="text-gray-700 mt-2"><strong>Student Answer:</strong> ${q.answer}</p>
+      <p class="mt-2 text-gray-700"><strong>AI Feedback:</strong><br><span class="whitespace-pre-line">${q.feedback}</span></p>
+    </div>
+  `;
+}).join("");
+
+  feedbackContent.innerHTML = blocks;
+  modal.classList.remove("hidden");
+}
+
+
+function closeFeedbackModal() {
+  document.getElementById("feedbackModal").classList.add("hidden");
+}
+
+function gradeSingleResponse(e, examId, responseId) {
+    e.preventDefault();
+
+    const form = e.target.closest("form");  
+    const btn = form.querySelector("button"); 
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="w-4 h-4 animate-spin" data-lucide="loader"></i> Grading...`;
+    lucide.createIcons();
+
+    fetch(`/electronic-exams/${examId}/grade-one/${responseId}/`, {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+            "X-Requested-With": "XMLHttpRequest"
+        }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Request failed");
+        return res.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showToast(`✅ Student graded: ${data.score} marks`);
+            setTimeout(() => location.reload(), 800);
+        } else {
+            alert("❌ Grading failed: " + (data.error || "Unknown error"));
+            btn.innerHTML = `<i class="w-4 h-4" data-lucide="plus-circle"></i> Grade`;
+            btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("❌ Request failed");
+        btn.innerHTML = `<i class="w-4 h-4" data-lucide="plus-circle"></i> Grade`;
+        btn.disabled = false;
+    });
+}
+
+function showProgressModal(title = "Processing...", total = 1) {
+  progressDone = 0;
+  progressTotal = total;
+  document.getElementById("progressTitle").textContent = title;
+  document.getElementById("progressCount").textContent = `0 / ${total}`;
+  document.getElementById("progressModal").classList.remove("hidden");
+}
+
+function updateProgressModal(done) {
+  progressDone = done;
+  document.getElementById("progressCount").textContent = `${done} / ${progressTotal}`;
+  if (done >= progressTotal) {
+    setTimeout(() => closeProgressModal(), 1000);
+  }
+}
+
+function closeProgressModal() {
+  document.getElementById("progressModal").classList.add("hidden");
+}
+
+</script>
+
+
+<!-- Toggle Switch Styling -->
+<style>
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+.slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: #4CAF50; }
+input:checked + .slider:before { transform: translateX(20px); }
+
+#toast {
+    opacity: 0;
+}
+.opacity-100 {
+    opacity: 1 !important;
+}
+
+#feedbackModal .shadow-xl {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+</style>
+{% endblock %}
