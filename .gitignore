@@ -5,7 +5,6 @@ venv/
 .env
 *.log
 staticfiles/
-media/
 .vscode/
 .DS_Store
 venv/
