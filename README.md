@@ -6,7 +6,7 @@ Follow these steps to set up **ExaGrade** on your local machine.
 
 ### **1. Clone the Repository**
 
-git clone https://github.com/yourusername/ExaGrade.git
+git clone https://github.com/RaghadAlshammari03/ExaGrade.git
 cd ExaGrade
 
 
