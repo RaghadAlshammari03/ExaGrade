@@ -32,113 +32,129 @@ def exam_list_view(request):
 
 @login_required
 def exam_detail_view(request, exam_id):
+    from collections import defaultdict
+    import os
+
     exam = get_object_or_404(Exam, id=exam_id)
 
     if request.user.is_instructor:
         context = {}
-        student_papers = StudentPaper.objects.filter(exam=exam, merged_into__isnull=True)
+        student_papers = StudentPaper.objects.filter(exam=exam).select_related('student')
         enrolled_students = set(exam.course.students.all())
         grades = Grade.objects.filter(exam=exam)
         graded_paper_ids = set(grades.values_list("studentpaper_id", flat=True))
         has_graded_papers = grades.exists()
 
-        paper_data = []
+        # Step 1: Extract text and name/id for all papers individually
         for paper in student_papers:
             if not paper.text and paper.file and os.path.exists(paper.file.path):
                 paper.text = extract_text_from_pdf(paper.file.path)
-                paper.save()
-
-            text = paper.text or ""
-            extracted_name, extracted_id = extract_name_and_id(text)
-
-            if not paper.manual_name and not paper.student:
-                if extracted_name and extracted_name.lower() != "empty":
+            if paper.text:
+                extracted_name, extracted_id = extract_name_and_id(paper.text)
+                if not paper.manual_name and extracted_name and extracted_name.lower() != "empty":
                     paper.manual_name = extracted_name
-                    paper.save()
-
-            if not paper.manual_id and not paper.student:
-                if extracted_id:
+                if not paper.manual_id and extracted_id:
                     paper.manual_id = extracted_id
-                    paper.save()
+            paper.save()
 
-            matched_student = paper.student
-            if not paper.student and paper.manual_id:
+        # Step 2: Group by manual_id (after cleaning)
+        grouped = defaultdict(list)
+        for paper in student_papers:
+            base_paper = paper.merged_into if paper.merged_into else paper
+            key = base_paper.id
+            grouped[key].append(paper)
+
+        def split_feedback_into_questions(feedback_text):
+            if not feedback_text:
+                return []
+            question_blocks = re.split(r"(Question \d+:)", feedback_text)
+            result = []
+            i = 1
+            while i < len(question_blocks):
+                if question_blocks[i].startswith("Question"):
+                    title = question_blocks[i].strip()
+                    content = question_blocks[i + 1].strip() if i + 1 < len(question_blocks) else ""
+                    content = re.sub(r"Student Answer:.*?(AI Feedback:)?", "", content, flags=re.DOTALL).strip()
+                    result.append({
+                        "question": title,
+                        "feedback": content,
+                        "type": "AI"
+                    })
+                    i += 2
+                else:
+                    i += 1
+            return result
+
+        paper_data = []
+        unmatched_ids = []
+
+        for group_id, papers in grouped.items():
+            base_paper = papers[0]
+
+            matched_student = base_paper.student
+            if not matched_student and base_paper.manual_id:
                 try:
-                    matched_student = CustomUser.objects.get(student_id=paper.manual_id)
-                    paper.student = matched_student
-                    paper.save()
+                    matched_student = CustomUser.objects.get(student_id=base_paper.manual_id)
+                    base_paper.student = matched_student
+                    base_paper.save()
                 except CustomUser.DoesNotExist:
                     matched_student = None
 
             is_enrolled_and_matched = matched_student in enrolled_students
-            grade = Grade.objects.filter(studentpaper=paper).first()
-            display_name = paper.manual_name.strip() if paper.manual_name else (
+            if not is_enrolled_and_matched:
+                unmatched_ids.extend([p.id for p in papers])
+
+            grade = Grade.objects.filter(studentpaper__in=papers).first()
+            display_name = base_paper.manual_name.strip() if base_paper.manual_name else (
                 matched_student.get_full_name() if matched_student else "Empty"
             )
 
-            merged_children = paper.merged_papers.all()
-            merged_files = []
-            for idx, m in enumerate(merged_children, start=2):
-                merged_files.append({
-                    "label": f"Paper {idx}",
-                    "url": m.file.url,
-                    "text": m.text,
-                    "id": m.id,
+            paper_entries = []
+            extract_entries = []
+
+            if len(papers) > 1:
+                combined_text = "\n\n".join(p.text or "" for p in papers)
+                extract_entries.append({
+                    "label": "All Papers",
+                    "text": combined_text,
+                    "id": f"all_{base_paper.id}"
                 })
 
-            paper.is_merged = paper.merged_papers.exists() or paper.merged_into is not None
-
-            def split_feedback_into_questions(feedback_text):
-                if not feedback_text:
-                    return []
-
-                question_blocks = re.split(r"(Question \d+:)", feedback_text)
-                result = []
-                i = 1
-
-                while i < len(question_blocks):
-                    if question_blocks[i].startswith("Question"):
-                        title = question_blocks[i].strip()
-                        content = question_blocks[i + 1].strip() if i + 1 < len(question_blocks) else ""
-
-                        content = re.sub(r"Student Answer:.*?(AI Feedback:)?", "", content, flags=re.DOTALL).strip()
-
-                        result.append({
-                            "question": title,
-                            "feedback": content,
-                            "type": "AI"
-                        })
-                        i += 2
-                    else:
-                        i += 1
-
-                return result
+            for idx, p in enumerate(papers):
+                paper_entries.append({
+                    "label": f"Paper {idx + 1}",
+                    "url": p.file.url,
+                    "id": p.id
+                })
+                extract_entries.append({
+                    "label": f"Paper {idx + 1}",
+                    "text": p.text or "",
+                    "id": p.id
+                })
 
             paper_data.append({
-                "id": paper.id,
-                "file_url": paper.file.url,
+                "id": base_paper.id,
                 "student_name": display_name,
+                "student_id": base_paper.manual_id or "—",
                 "grade": grade.grade if grade else "not graded yet",
                 "manual_override": grade.manual_override if grade and grade.manual_override else None,
                 "feedback": grade.feedback if grade else None,
-                "extracted_text": text,
-                "flagged_issues": paper.flagged_issues.filter(resolved=False),
-                "student_id": paper.manual_id or "—",
-                "manual_id": paper.manual_id,
-                "instructor_feedback": paper.instructor_feedback or "",
-                "paper": paper,
+                "instructor_feedback": base_paper.instructor_feedback or "",
                 "is_enrolled_and_matched": is_enrolled_and_matched,
-                "merged_files": merged_files,
                 "badges": list(filter(None, [
-                    {"text": "Ungraded", "style": "bg-yellow-100 text-yellow-800"} if paper.id not in graded_paper_ids else None,
-                    {"text": "Name Missing", "style": "bg-red-100 text-red-700"} if not paper.manual_name and not matched_student else None,
-                    {"text": "ID Missing", "style": "bg-orange-100 text-orange-700"} if not paper.manual_id else None,
-                    {"text": "⚠️ Review Needed", "style": "bg-red-100 text-red-700"} if paper.flagged_issues.filter(resolved=False).exists() else None,
+                    {"text": "Ungraded", "style": "bg-yellow-100 text-yellow-800"} if base_paper.id not in graded_paper_ids else None,
+                    {"text": "Name Missing", "style": "bg-red-100 text-red-700"} if not base_paper.manual_name and not matched_student else None,
+                    {"text": "ID Missing", "style": "bg-orange-100 text-orange-700"} if not base_paper.manual_id else None,
+                    {"text": "⚠️ Review Needed", "style": "bg-red-100 text-red-700"} if any(p.flagged_issues.filter(resolved=False).exists() for p in papers) else None,
                     {"text": "Not Enrolled", "style": "bg-gray-100 text-gray-600 italic"} if not is_enrolled_and_matched else None,
                     {"text": "Enrolled", "style": "bg-green-100 text-green-700"} if is_enrolled_and_matched else None,
-                    {"text": "Merged", "style": "bg-purple-100 text-purple-800"} if paper.is_merged else None,
+                    {"text": "Merged", "style": "bg-purple-100 text-purple-800"} if len(papers) > 1 else None,
                 ])),
+                "merged_files": paper_entries,
+                "merged_extracts": extract_entries,
                 "graded_questions": split_feedback_into_questions(grade.feedback) if grade and grade.feedback else [],
+                "paper_ids": [p.id for p in papers],
+                "is_merged": len(papers) > 1,
             })
 
         exam.update_status()
@@ -146,7 +162,6 @@ def exam_detail_view(request, exam_id):
         context.update({
             "exam": exam,
             "paper_data": paper_data,
-            "student_papers": student_papers,
             "grades": grades,
             "send_options": ["Grades", "AI Feedback", "Instructor Feedback"],
             "grading_button_text": get_grading_stage_text(exam),
@@ -160,7 +175,10 @@ def exam_detail_view(request, exam_id):
                 if (paper["manual_override"] or paper["grade"]) not in ["", None, "not graded yet"]
             ]),
             "paper_data_json": json.dumps(paper_data, default=str),
-        })        
+            "student_papers": student_papers,
+        })
+
+        request.session["unmatched_ids"] = unmatched_ids
 
         return render(request, "exams/exam_detail.html", context)
 
@@ -336,6 +354,9 @@ def grade_exam(request, exam_id):
     from utils.parser import group_papers_by_id
     from exa_ai.grading import grade_answer, parse_score_and_feedback
     from exams.models import FlaggedIssue
+    from datetime import datetime
+
+    start_time = datetime.now()
 
     exam = get_object_or_404(Exam, id=exam_id)
     if request.user != exam.instructor:
@@ -344,9 +365,7 @@ def grade_exam(request, exam_id):
         messages.error(request, "⚠️ You are not authorized to grade this exam.")
         return redirect("exams:detail", exam_id=exam.id)
 
-    # ✅ Read grading mode from POST data
-    mode = request.POST.get("mode", "").lower()  # 'new', 'regrade', or ''
-
+    mode = request.POST.get("mode", "").lower()
     grouped, _ = group_papers_by_id(exam)
     questions = exam.questions.all()
     graded_results = []
@@ -359,21 +378,16 @@ def grade_exam(request, exam_id):
         already_graded = Grade.objects.filter(exam=exam, studentpaper__in=papers).exists()
         needs_regrading = any(p.needs_regrading for p in papers)
 
-        # ✅ MODE-BASED GRADING CONDITIONS
-        if mode == "new":
-            if not needs_regrading:
-                continue  # Only grade flagged/merged papers
+        if mode == "new" and not needs_regrading:
+            continue
         elif mode == "regrade":
             Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
             FlaggedIssue.objects.filter(studentpaper__in=papers).delete()
-        else:
-            if already_graded and not needs_regrading:
-                continue  # Default: skip already graded
+        elif already_graded and not needs_regrading:
+            continue
 
-        # ✅ Clear before regrading (skip if mode is default and grading fresh)
-        if mode in ["regrade", "new"] or needs_regrading:
-            Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
-            FlaggedIssue.objects.filter(studentpaper__in=papers).delete()
+        Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
+        FlaggedIssue.objects.filter(studentpaper__in=papers).delete()
 
         total_score = 0
         feedback_parts = []
@@ -421,6 +435,9 @@ def grade_exam(request, exam_id):
         })
 
     exam.update_status()
+    end_time = datetime.now()
+    elapsed = (end_time - start_time).total_seconds()
+    print(f"✅ Graded {len(graded_results)} students in {elapsed:.2f} seconds.")
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({
@@ -432,25 +449,29 @@ def grade_exam(request, exam_id):
     messages.success(request, "✅ Grading complete!")
     return redirect("exams:detail", exam_id=exam.id)
 
+
 @require_POST
 @login_required
 def grade_individual_student(request, exam_id, paper_id):
     from exa_ai.grading import grade_answer, parse_score_and_feedback
 
     exam = get_object_or_404(Exam, id=exam_id)
-    paper = get_object_or_404(StudentPaper, id=paper_id, exam=exam)
+    base_paper = get_object_or_404(StudentPaper, id=paper_id, exam=exam)
 
     if request.user != exam.instructor:
         return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
 
-    # 🧠 Only grade this specific paper's extracted text
-    text_to_grade = paper.text or ""
-    student_id = paper.manual_id or ""
+    papers = [base_paper]
+    if base_paper.is_merged:
+        papers += list(base_paper.merged_papers.all())
+
+    combined_text = "\n\n".join([p.text or "" for p in papers])
+
+    student_id = base_paper.manual_id or ""
     student = CustomUser.objects.filter(student_id=student_id).first() if student_id else None
 
-    # Clean up previous grades/flags
-    Grade.objects.filter(exam=exam, studentpaper=paper).delete()
-    FlaggedIssue.objects.filter(studentpaper=paper).delete()
+    Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
+    FlaggedIssue.objects.filter(studentpaper__in=papers).delete()
 
     total_score = 0
     feedback_parts = []
@@ -459,7 +480,7 @@ def grade_individual_student(request, exam_id, paper_id):
 
     for q in questions:
         result = grade_answer(
-            q.text, text_to_grade, q.correct_answer, q.marks,
+            q.text, combined_text, q.correct_answer, q.marks,
             eval_type=q.eval_type or "strict",
             custom_note=q.custom_eval or "",
             question_type=q.question_type
@@ -467,29 +488,30 @@ def grade_individual_student(request, exam_id, paper_id):
         score, feedback, needs_attention = parse_score_and_feedback(result, q.marks, q_number)
 
         if needs_attention:
-            FlaggedIssue.objects.create(
-                studentpaper=paper,
-                question=q,
-                flagged_text=text_to_grade,
-                manual_score=None,
-                resolved=False
-            )
+            for p in papers:
+                FlaggedIssue.objects.create(
+                    studentpaper=p,
+                    question=q,
+                    flagged_text=combined_text,
+                    manual_score=None,
+                    resolved=False
+                )
 
         total_score += score
         feedback_parts.append(feedback)
         q_number += 1
 
-    # ✅ Save feedback for this paper only
     Grade.objects.create(
         student=student,
-        studentpaper=paper,
+        studentpaper=base_paper,
         exam=exam,
         grade=str(total_score),
         feedback="<br><br>".join(feedback_parts)
     )
 
-    paper.needs_regrading = False
-    paper.save()
+    for p in papers:
+        p.needs_regrading = False
+        p.save()
 
     exam.update_status()
     messages.success(request, f"✅ Graded: {student.get_full_name() if student else 'Unmatched'}")
@@ -510,10 +532,20 @@ def merge_papers_by_id(request, exam_id):
     if papers.count() < 2:
         return JsonResponse({"error": "Not enough papers to merge"}, status=400)
 
+    # 🔥 NEW: Pick a proper base paper (oldest)
+    base_paper = papers.order_by('id').first()
+
     for paper in papers:
-        paper.is_merged = True
-        paper.needs_regrading = True
-        paper.save()
+        if paper != base_paper:
+            paper.is_merged = True
+            paper.merged_into = base_paper  # ✅ This was missing
+            paper.needs_regrading = True
+            paper.save()
+
+    base_paper.is_merged = True
+    base_paper.merged_into = None  # Parent must have merged_into=null
+    base_paper.needs_regrading = True
+    base_paper.save()
 
     Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
 
@@ -522,33 +554,48 @@ def merge_papers_by_id(request, exam_id):
 
 @require_POST
 @login_required
-def unmerge_papers_by_id(request, exam_id):
+def merge_papers_by_id(request, exam_id):
     exam = get_object_or_404(Exam, id=exam_id)
+
     if request.user != exam.instructor:
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
-    student_id = request.POST.get("student_id", "").strip()
-    if not student_id:
-        return JsonResponse({"error": "Missing student ID"}, status=400)
+    paper_ids = request.POST.getlist('paper_ids')
+    if len(paper_ids) < 2:
+        return JsonResponse({"error": "Select at least 2 papers to merge."}, status=400)
 
-    papers = StudentPaper.objects.filter(exam=exam, manual_id=student_id)
+    papers = StudentPaper.objects.filter(id__in=paper_ids, exam=exam)
+
+    manual_ids = set(p.manual_id for p in papers if p.manual_id)
+    if len(manual_ids) != 1:
+        return JsonResponse({"error": "Cannot merge papers with different Student IDs."}, status=400)
+
+    base_paper = papers.order_by('id').first()
+
+    base_paper.is_merged = True
+    base_paper.merged_into = None
+    base_paper.needs_regrading = True
+    base_paper.save()
+
     for paper in papers:
-        paper.is_merged = False
-        paper.needs_regrading = True
-        paper.save()
+        if paper != base_paper:
+            paper.is_merged = True
+            paper.merged_into = base_paper
+            paper.needs_regrading = True
+            paper.save()
 
-    Grade.objects.filter(exam=exam, studentpaper__in=papers).delete()
+    Grade.objects.filter(studentpaper__in=papers, exam=exam).delete()
 
-    return JsonResponse({"success": True, "message": f"Unmerged {papers.count()} papers for ID: {student_id}"})
+    print(f"[✅] Successfully merged {len(papers)} papers into base_paper ID {base_paper.id} (student_id={base_paper.manual_id})")
+
+    return JsonResponse({"success": True, "message": f"Merged {len(papers)} papers successfully."})
 
 
 @require_POST
 @login_required
 def merge_papers(request, exam_id):
-    print("=== DEBUG: merge request POST ===")
-    print("POST keys:", request.POST.keys())
-    print("paper_ids raw:", request.POST.getlist("paper_ids"))
     exam = get_object_or_404(Exam, id=exam_id)
+
     if request.user != exam.instructor:
         return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
 
@@ -557,17 +604,25 @@ def merge_papers(request, exam_id):
         return JsonResponse({"success": False, "error": "Select at least 2 papers to merge."}, status=400)
 
     papers = StudentPaper.objects.filter(id__in=paper_ids, exam=exam)
+
     ids = set(p.manual_id for p in papers)
     names = set((p.manual_name or "").strip().lower() for p in papers)
-    raw_names = set(p.manual_name for p in papers)
+    raw_names = set((p.manual_name or "") for p in papers)
 
+    # Validate IDs
+    if "-" in ids or "" in ids or None in ids:
+        return JsonResponse({
+            "success": False,
+            "error": "Cannot merge: One or more papers are missing a student ID."
+        }, status=200)
 
     if len(ids) > 1:
         return JsonResponse({
             "success": False,
             "error": "Cannot merge: Student IDs do not match."
-        }, status=200)  
+        }, status=200)
 
+    # Detect Name Conflict
     if len(names) > 1:
         return JsonResponse({
             "success": False,
@@ -577,7 +632,6 @@ def merge_papers(request, exam_id):
         })
 
     base_paper = papers.first()
-    combined_text = "\n\n".join(p.text or "" for p in papers)
 
     for p in papers:
         if p != base_paper:
@@ -585,43 +639,139 @@ def merge_papers(request, exam_id):
             p.merged_into = base_paper
             p.save()
 
-    base_paper.text = combined_text
     base_paper.is_merged = len(papers) > 1
     base_paper.merged_into = None
     base_paper.needs_regrading = True
     base_paper.save()
 
     Grade.objects.filter(studentpaper__in=papers, exam=exam).delete()
+
     for p in papers:
         p.instructor_feedback = ""
         p.manual_feedback = ""
         p.save()
 
     exam.update_status()
-    return JsonResponse({"success": True})
 
+    return JsonResponse({"success": True})
 
 @require_POST
 @login_required
-def unmerge_paper(request, paper_id):
-    paper = get_object_or_404(StudentPaper, id=paper_id)
-    if request.user != paper.exam.instructor:
+def unmerge_papers(request, exam_id):
+    exam = get_object_or_404(Exam, id=exam_id)
+
+    if request.user != exam.instructor:
         return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
 
-    merged_children = paper.merged_papers.all()
-    for child in merged_children:
-        child.is_merged = False
-        child.merged_into = None
-        child.manual_name = paper.manual_name  
-        child.save()
+    try:
+        data = json.loads(request.body)
+        paper_id = data.get('paper_id')
+    except Exception:
+        return JsonResponse({"success": False, "error": "Invalid JSON"})
 
-    paper.is_merged = False
-    paper.merged_into = None
-    paper.save()
+    if not paper_id:
+        return JsonResponse({"success": False, "error": "Paper ID missing."})
 
-    Grade.objects.filter(studentpaper=paper).delete()
-    paper.exam.update_status()
-    return JsonResponse({"success": True})
+    merged_paper = get_object_or_404(StudentPaper, id=paper_id, exam=exam)
+
+    if not merged_paper.is_merged:
+        return JsonResponse({"success": False, "error": "This paper is not a merged paper."})
+
+    if merged_paper.merged_files:
+        for file_obj in merged_paper.merged_files.all():
+            StudentPaper.objects.create(
+                exam=exam,
+                file=file_obj.file,
+                manual_name=merged_paper.manual_name,
+                manual_id=merged_paper.manual_id,
+                is_merged=False,
+                needs_regrading=True,
+            )
+
+    merged_paper.delete()
+
+    exam.update_status()
+
+    return JsonResponse({"success": True, "message": "Successfully unmerged."})
+
+@require_POST
+@login_required
+def unmerge_papers_by_id(request, exam_id):
+    import json
+    from django.http import JsonResponse
+    from django.shortcuts import get_object_or_404
+    from .models import StudentPaper
+
+    exam = get_object_or_404(Exam, id=exam_id)
+
+    if request.user != exam.instructor:
+        print("[❌] Unauthorized access attempt to unmerge.")
+        return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
+
+    try:
+        data = json.loads(request.body)
+        student_id = data.get('student_id')
+    except Exception as e:
+        print(f"[❌] JSON parsing error: {e}")
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
+
+    if not student_id:
+        print("[❌] No student ID provided.")
+        return JsonResponse({"success": False, "error": "Student ID missing"}, status=400)
+
+    print(f"[🔎] Trying to unmerge papers for student_id={student_id}")
+
+    # Step 1: Try to find the parent merged paper
+    parent_paper = StudentPaper.objects.filter(
+        exam=exam,
+        manual_id=student_id,
+        merged_into=None
+    ).first()
+
+    if not parent_paper:
+        print("[⚠️] No direct parent found. Trying fallback (any is_merged=True paper)")
+        parent_paper = StudentPaper.objects.filter(
+            exam=exam,
+            manual_id=student_id,
+            is_merged=True
+        ).first()
+
+    if not parent_paper:
+        print(f"[❌] No merged paper found with student_id={student_id}")
+        return JsonResponse({"success": False, "error": "No merged paper found for this student ID"}, status=404)
+
+    print(f"[✅] Found parent paper: id={parent_paper.id}, manual_id={parent_paper.manual_id}, is_merged={parent_paper.is_merged}")
+
+    # Step 2: Find all children papers
+    merged_children = StudentPaper.objects.filter(merged_into=parent_paper)
+
+    print(f"[📄] Found {merged_children.count()} merged children linked to parent paper.")
+
+    # Step 3: Unmerge children
+    if merged_children.exists():
+        for child in merged_children:
+            print(f"[➡️] Unmerging child paper id={child.id}")
+            child.is_merged = False
+            child.merged_into = None
+            child.manual_id = None  # Clear manual_id (optional depending on design)
+            child.needs_regrading = True
+            child.save()
+            print(f"[✅] Unmerged child id={child.id} successfully.")
+    else:
+        print("[ℹ️] No merged children. Only parent paper will be unmerged.")
+
+    # Step 4: Unmerge parent paper itself
+    parent_paper.is_merged = False
+    parent_paper.merged_into = None
+    parent_paper.needs_regrading = True
+    parent_paper.save()
+    print(f"[✅] Parent paper id={parent_paper.id} unmerged successfully.")
+
+    # Step 5: Update exam status
+    exam.update_status()
+    print("[🔃] Exam status updated.")
+
+    return JsonResponse({"success": True, "message": "Successfully unmerged."})
 
 
 @require_POST
@@ -641,15 +791,12 @@ def resolve_name_conflict_merge(request, exam_id):
     paper_ids_int = list(map(int, paper_ids))
     papers = StudentPaper.objects.filter(id__in=paper_ids_int, exam=exam)
     base_paper = papers.first()
-    combined_text = "\n\n".join(p.text or "" for p in papers)
-
     for p in papers:
         if p != base_paper:
             p.is_merged = True
             p.merged_into = base_paper
             p.save()
 
-    base_paper.text = combined_text
     for p in papers:
         p.manual_name = resolved_name
         p.save()
@@ -990,9 +1137,13 @@ def generate_answered_pdf(request, exam_id):
     buffer.seek(0)
     return FileResponse(buffer, as_attachment=True, filename=f"{exam.name}_AnsweredModule.pdf")
 
+from datetime import datetime
+
 @login_required
 @require_POST
 def upload_student_paper(request, exam_id):
+    start_time = datetime.now()
+
     exam = get_object_or_404(Exam, id=exam_id)
     if request.user != exam.instructor:
         return JsonResponse({"success": False, "error": "Unauthorized access."}, status=403)
@@ -1002,9 +1153,6 @@ def upload_student_paper(request, exam_id):
         return JsonResponse({"success": False, "error": "No files uploaded."})
 
     results = []
-    from collections import defaultdict
-
-    # Track names per student ID
     names_per_id = defaultdict(set)
     papers_by_id = defaultdict(list)
 
@@ -1015,71 +1163,71 @@ def upload_student_paper(request, exam_id):
 
         extracted_name, extracted_id = extract_name_and_id(extracted_text or "")
         if extracted_name and extracted_name.lower() != "empty":
-            paper.manual_name = extracted_name
+            paper.manual_name = extracted_name.strip()
 
         if extracted_id:
-            paper.manual_id = extracted_id
-        
+            paper.manual_id = extracted_id.strip()
+
         if paper.manual_id and paper.manual_name:
-            names_per_id[paper.manual_id].add(paper.manual_name.strip())
+            names_per_id[paper.manual_id].add(paper.manual_name)
             papers_by_id[paper.manual_id].append(paper.id)
 
-        # Try to match student
-        parts = extracted_name.split()
-        first = parts[0]
-        last = parts[-1] if len(parts) > 1 else ""
-        try:
-            matched_student = CustomUser.objects.get(
-                first_name__icontains=first,
-                last_name__icontains=last
-            )
-            paper.student = matched_student
-        except CustomUser.DoesNotExist:
-            pass
+        # Try to match the student by first and last name
+        if paper.manual_name:
+            parts = paper.manual_name.split()
+            first = parts[0]
+            last = parts[-1] if len(parts) > 1 else ""
+            try:
+                matched_student = CustomUser.objects.get(
+                    first_name__icontains=first,
+                    last_name__icontains=last
+                )
+                paper.student = matched_student
+            except CustomUser.DoesNotExist:
+                pass
 
         paper.save()
 
-        # ✅ AUTO-MERGE CHECK: Find others with same manual ID
+    # Now auto-merge by manual_id:
+    student_papers = StudentPaper.objects.filter(exam=exam)
+    grouped = defaultdict(list)
+    for paper in student_papers:
         if paper.manual_id:
-            matching_papers = StudentPaper.objects.filter(
-                exam=exam,
-                manual_id=paper.manual_id,
-                merged_into__isnull=True
-            ).exclude(id=paper.id)
+            grouped[paper.manual_id].append(paper)
 
-            if matching_papers.exists():
-                to_merge = list(matching_papers) + [paper]
-                base_paper = to_merge[0]
-                combined_text = "\n\n".join(p.text or "" for p in to_merge)
+    name_conflicts = {}
 
-                for p in to_merge:
+    for student_id, papers in grouped.items():
+        if len(papers) >= 2:
+            names = set((p.manual_name or "").strip().lower() for p in papers)
+
+            if len(names) > 1:
+                name_conflicts[student_id] = list(names)
+            else:
+                base_paper = papers[0]
+                for p in papers:
                     if p != base_paper:
                         p.is_merged = True
                         p.merged_into = base_paper
                         p.save()
-
-                base_paper.text = combined_text
                 base_paper.is_merged = True
-                base_paper.merged_into = None
                 base_paper.needs_regrading = True
                 base_paper.save()
 
-        results.append({"id": paper.id, "name": paper.manual_name})
-    
-    name_conflicts = {
-        sid: list(names)
-        for sid, names in names_per_id.items()
-        if len(names) > 1
-    }
-
     exam.update_status()
+
+    end_time = datetime.now()
+    elapsed = (end_time - start_time).total_seconds()
+    print(f"🧠 Uploaded {len(uploaded_files)} paper(s) in {elapsed:.2f} seconds.")
+
     return JsonResponse({
         "success": True,
-        "total": len(results),
-        "results": results,
+        "total": len(uploaded_files),
+        "results": [{"id": p.id, "name": p.manual_name} for p in student_papers],
         "conflicts": name_conflicts if name_conflicts else None,
-        "paper_ids_by_id": dict(papers_by_id)
+        "paper_ids_by_id": {k: [str(id) for id in v] for k, v in papers_by_id.items()}
     })
+
 
 @login_required
 def edit_exam(request, exam_id):
@@ -1354,3 +1502,20 @@ def save_instructor_feedback(request, paper_id):
     paper.save()
 
     return JsonResponse({"success": True})
+
+@require_POST
+@login_required
+def delete_all_papers(request, exam_id):
+    exam = get_object_or_404(Exam, id=exam_id)
+
+    if request.user != exam.instructor:
+        return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
+
+    StudentPaper.objects.filter(exam=exam).delete()
+    Grade.objects.filter(exam=exam).delete()
+    FlaggedIssue.objects.filter(studentpaper__exam=exam).delete()
+
+    exam.update_status()
+
+    print("🗑️ All student papers deleted for exam:", exam.name)
+    return JsonResponse({"success": True, "message": "All student papers deleted."})

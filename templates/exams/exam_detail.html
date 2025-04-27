@@ -128,16 +128,25 @@
                     </span>
                 </h3>
 
-                <div class="mb-4">
-                    <form id="uploadForm" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <label class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow cursor-pointer">
-                            <i data-lucide="upload" class="w-4 h-4"></i> Upload More Papers
-                            <input type="file" name="student_papers" multiple class="hidden" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPapers(this.files)">
-                        </label>
-                    </form>
-                </div>
+                <div class="mb-4 flex justify-between items-center flex-wrap gap-4">
+                  <!-- Upload Button -->
+                  <form id="uploadForm" enctype="multipart/form-data">
+                      {% csrf_token %}
+                      <label class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow cursor-pointer">
+                          <i data-lucide="upload" class="w-4 h-4"></i> Upload More Papers
+                          <input type="file" name="student_papers" multiple class="hidden" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPapers(this.files)">
+                      </label>
+                  </form>
+              
+                  <!-- Delete All Button -->
+                  {% if student_papers %}
+                  <button onclick="openDeleteAllModal()" class="text-red-600 hover:text-red-800 flex items-center gap-2 text-sm font-semibold">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i> Delete All Papers
+                  </button>
+                  {% endif %}
+              </div>            
 
+              <div class="student-papers-container">
                 {% for paper in student_papers %}
                 <div class="flex justify-between items-center p-4 bg-white border rounded-xl shadow-sm hover:shadow-md transition">
                     <div>
@@ -157,6 +166,7 @@
                 <p class="text-sm text-gray-500">No student papers uploaded yet.</p>
                 {% endfor %}
             </div>
+          </div>
 
             <!-- Solution Module -->
             <div class="p-5 border rounded-xl bg-gray-50">
@@ -234,14 +244,15 @@
                 <tbody>
                   {% for paper in paper_data %}
                     <tr class="border-t hover:bg-gray-50">
-                        <td class="py-3 px-4 text-center">
-                          {% if paper.merged_files or not paper.paper.merged_into %}
-                            <input type="checkbox" class="merge-checkbox" value="{{ paper.id }}">
-                          {% else %}
-                            — 
-                          {% endif %}
-                        </td>
-                        
+                      <td class="py-3 px-4 text-center">
+                        {% if paper.merged_files or not paper.paper.merged_into %}
+                          <input type="checkbox" name="paper_ids" value="{{ paper.id }}" 
+                                 class="merge-checkbox" 
+                                 data-student-id="{{ paper.student_id }}">
+                        {% else %}
+                          — 
+                        {% endif %}
+                      </td>                                            
 
                         <!-- Student Name -->
                         <td class="py-3 px-6 font-medium student-name text-gray-800">
@@ -275,7 +286,7 @@
                         <!-- Student ID -->
                         <td class="py-3 px-6 text-sm text-gray-600">
                             <span id="studentId-{{ paper.id }}">
-                                {{ paper.manual_id|default:"—" }}
+                              {{ paper.student_id|default:"—" }}
                             </span>
                             {% if paper.manual_id %}
                               {% if user.is_instructor %}
@@ -297,11 +308,11 @@
 
                             <div id="editIdBox-{{ paper.id }}" class="hidden mt-1 flex flex-col gap-2">
                                 <div class="flex gap-2">
-                                    <input id="idInput-{{ paper.id }}" type="text" inputmode="numeric" class="text-sm border px-2 py-1 rounded w-28" value="{{ paper.paper.manual_id }}">
+                                    <input id="idInput-{{ paper.id }}" type="text" inputmode="numeric" class="text-sm border px-2 py-1 rounded w-28" value="{{ paper.student_id }}">
                                     <button onclick="submitIdChange('{{ paper.id }}')" class="bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700">Save</button>
                                     <button onclick="toggleIdEdit('{{ paper.id }}')" class="text-gray-500 text-sm hover:text-red-600">Cancel</button>
                                 </div>
-                                <!-- ✅ Success / Error Message -->
+                                <!-- Success / Error Message -->
                                 <span id="confirmId-{{ paper.id }}" class="text-green-600 text-sm hidden">✅ Saved</span>
                                 <span id="errorId-{{ paper.id }}" class="text-red-600 text-sm hidden">❌ Please enter a valid numeric ID.</span>
                             </div>                            
@@ -351,15 +362,6 @@
                               <i data-lucide="folder-open" class="w-4 h-4"></i> View Papers
                             </summary>
                             <div class="mt-2 space-y-2 pl-6">
-                              <!-- Main paper -->
-                              <div class="flex items-center gap-2">
-                                <span class="text-sm text-gray-700">Paper 1:</span>
-                                <a href="{{ paper.file_url }}" target="_blank"
-                                  class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-sm px-3 py-1 rounded-lg shadow">
-                                  <i data-lucide="eye" class="w-4 h-4"></i> View
-                                </a>
-                              </div>
-                              <!-- Merged papers -->
                               {% for file in paper.merged_files %}
                               <div class="flex items-center gap-2">
                                 <span class="text-sm text-gray-700">{{ file.label }}:</span>
@@ -380,16 +382,7 @@
                               <i data-lucide="eye" class="w-4 h-4"></i> View Extracted
                             </summary>
                             <div class="mt-2 space-y-2 pl-6">
-                              <!-- Main paper -->
-                              <div class="flex items-center gap-2">
-                                <span class="text-sm text-gray-700">Paper 1:</span>
-                                <button onclick="toggleTextModal('{{ paper.id }}')"
-                                  class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-sm px-3 py-1 rounded-lg shadow">
-                                  <i data-lucide="eye" class="w-4 h-4"></i> View Extracted
-                                </button>
-                              </div>
-                              <!-- Merged papers -->
-                              {% for file in paper.merged_files %}
+                              {% for file in paper.merged_extracts %}
                               <div class="flex items-center gap-2">
                                 <span class="text-sm text-gray-700">{{ file.label }}:</span>
                                 <button onclick="toggleTextModal('merged-{{ file.id }}')"
@@ -401,7 +394,6 @@
                             </div>
                           </details>
                         </td>
-                        
 
                         <!-- AI Feedback -->
                         <td class="py-3 px-6 text-center align-middle">
@@ -452,10 +444,25 @@
                             </form>
                             {% endif %}
                           </td>
-                    </tr>
+                      </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            {% for paper in paper_data %}
+            {% for file in paper.merged_extracts %}
+              <div id="textModalmerged-{{ file.id }}" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+                <div class="bg-white rounded-xl p-6 shadow-xl max-w-3xl w-full relative">
+                  <button onclick="toggleTextModal('merged-{{ file.id }}')" class="absolute top-3 right-4 text-gray-400 hover:text-red-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                  </button>
+                  <h2 class="text-xl font-bold text-gray-800 mb-4">🧠 Extracted Text ({{ file.label }})</h2>
+                  <div class="overflow-y-auto max-h-[65vh] text-gray-700 whitespace-pre-wrap text-sm">
+                    {{ file.text|default:"No extracted text available." }}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          {% endfor %}
         </div>
     </div>
     </div>
@@ -533,22 +540,22 @@
 
         <!-- Unmatched Students -->
         {% with unmatched_ids=request.session.unmatched_ids %}
-        {% if unmatched_ids %}
-        <div class="mt-6 border-t pt-4">
-        <h3 class="text-sm font-semibold text-red-600 mb-2">Students Not Matched (Check Name or ID)</h3>
-        <ul class="text-sm text-gray-700 space-y-1 max-h-40 overflow-y-auto">
-            {% for paper in student_papers %}
-            {% if paper.id in unmatched_ids %}
-                <li class="bg-white p-2 rounded shadow-sm">
-                {{ paper.manual_name|default:"—" }} (ID: {{ paper.manual_id|default:"—" }})
-                </li>
-            {% endif %}
-            {% endfor %}
-        </ul>
-        </div>
-        {% endif %}
-        {% endwith %}
-        
+          {% if unmatched_ids %}
+          <div class="mt-6 border-t pt-4">
+            <h3 class="text-sm font-semibold text-red-600 mb-2">Students Not Matched (Check Name or ID)</h3>
+            <ul class="text-sm text-gray-700 space-y-1 max-h-40 overflow-y-auto">
+              {% for paper in student_papers %}
+                {% if paper.id|stringformat:"s" in unmatched_ids %}
+                  <li class="bg-white p-2 rounded shadow-sm">
+                    {{ paper.manual_name|default:"—" }} (ID: {{ paper.manual_id|default:"—" }})
+                  </li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% endwith %}
+       
         <p class="text-sm text-gray-500 mb-4">Selected <span id="selectedCount">{{ student_papers|length }}</span> of {{ student_papers|length }} students.</p>
   
         <!-- Submit -->
@@ -704,6 +711,26 @@
 </div>
 
 
+<!-- Delete All Papers Confirmation Modal -->
+<div id="deleteAllModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-40 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full relative">
+    <h3 class="text-xl font-bold text-red-600 mb-3">Delete All Papers?</h3>
+    <p class="text-sm text-gray-600 mb-4">
+      This will permanently delete <strong>all uploaded student papers</strong> for this exam. Are you sure?
+    </p>
+    <form id="deleteAllForm" method="POST">
+      {% csrf_token %}
+      <div class="flex justify-end gap-3 mt-4">
+        <button type="button" onclick="closeDeleteAllModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-sm rounded-lg">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white hover:bg-red-700 text-sm rounded-lg">Yes, Delete All</button>
+      </div>
+    </form>
+    <button onclick="closeDeleteAllModal()" class="absolute top-3 right-4 text-gray-400 hover:text-red-500">
+      <i data-lucide="x" class="w-5 h-5"></i>
+    </button>
+  </div>
+</div>
+
 <!-- Toast Message -->
 <div id="toastSuccess" class="fixed bottom-6 right-6 z-50 hidden bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-all duration-300">
     <span id="toastMessage">✅ Operation complete</span>
@@ -808,7 +835,7 @@ function submitNameChange(paperId) {
     });
 }
 
-function x(paperId) {
+function toggleIdEdit(paperId){
     document.getElementById("editIdBox-" + paperId).classList.toggle("hidden");
 }
 
@@ -1024,87 +1051,88 @@ let conflictQueue = [];
 let conflictPapersMap = {};
 let currentExamId = null;
 
+let ocrStartTime;
+
 function uploadPapers(files) {
   if (files.length === 0) return;
+
+  ocrStartTime = performance.now();
 
   const formData = new FormData();
   for (let file of files) formData.append("student_papers", file);
   formData.append("csrfmiddlewaretoken", '{{ csrf_token }}');
 
   showProgressModal("Uploading Papers...", files.length);
-
   fetch("{% url 'exams:upload_student_paper' exam.id %}", {
     method: "POST",
     body: formData
   })
     .then(res => res.json())
     .then(data => {
+      const ocrEndTime = performance.now();
+      const ocrDuration = ((ocrEndTime - ocrStartTime) / 1000).toFixed(2);
+
       if (data.success) {
-        // ✅ Name conflict? Open modal to resolve
+        showToast("✅ Upload complete!");
+
         if (data.conflicts) {
           conflictQueue = Object.entries(data.conflicts);
           conflictPapersMap = data.paper_ids_by_id;
-          currentExamId = examId;
+          currentExamId = "{{ exam.id }}";
           showNextConflict();
           closeProgressModal();
           return;
         }
 
-        // ✅ Continue showing progress modal
         let done = 0;
-        data.results.forEach((_, i) => {
+        data.results.forEach((result, i) => {
           setTimeout(() => {
-            updateProgressModal(++done);
-            if (done === data.total) setTimeout(() => location.reload(), 1500);
+            done++;
+            updateProgressModal(done);
+            if (done === data.total) {
+              setTimeout(() => location.reload(), 1500);
+            }
           }, i * 150);
         });
       } else {
-        alert("❌ Upload failed");
+        showToast("❌ Upload failed", 60000);
         closeProgressModal();
       }
     })
     .catch(() => {
-      alert("❌ Upload error");
+      showToast("❌ Upload error", 60000);
       closeProgressModal();
     });
 }
 
-function showNameConflictModal(conflicts, paperIdsById, examId) {
-  const examInput = document.getElementById("conflictExamId");
-  const papersInput = document.getElementById("conflictPaperIds");
-  const optionsList = document.getElementById("nameOptionsList");
+
+function showNameConflictModal(nameOptions, paperIds) {
   const modal = document.getElementById("nameConflictModal");
-
-  examInput.value = examId;
-  optionsList.innerHTML = "";
-  papersInput.value = "";
-
-  const [studentId, names] = Object.entries(conflicts)[0]; // Handle one conflict per upload
-  const paperIds = paperIdsById[studentId] || [];
+  const optionsList = document.getElementById("nameOptionsList");
+  const papersInput = document.getElementById("conflictPaperIds");
 
   papersInput.value = paperIds.join(",");
 
-  names.forEach((name, index) => {
-    const id = `option_${index}`;
+  optionsList.innerHTML = "";
+  nameOptions.forEach((name, idx) => {
     optionsList.innerHTML += `
-      <div class="flex items-center gap-2">
-        <input type="radio" id="${id}" name="selected_name" value="${name}" class="text-blue-600">
-        <label for="${id}" class="text-sm text-gray-800">${name}</label>
+      <div class="flex items-center gap-2 mb-2">
+        <input type="radio" name="selected_name" id="name${idx}" value="${name}" class="text-blue-600">
+        <label for="name${idx}" class="text-gray-700 text-sm">${name}</label>
       </div>
     `;
   });
 
-  // Add "Other" option
-  const id = `option_other`;
+  // Add "Other" custom name option
   optionsList.innerHTML += `
-    <div class="flex items-center gap-2 mt-2">
-      <input type="radio" id="${id}" name="selected_name" value="other" class="text-blue-600">
-      <label for="${id}" class="text-sm text-gray-800">Other (Custom Name)</label>
+    <div class="flex items-center gap-2 mt-4">
+      <input type="radio" name="selected_name" id="otherName" value="other" class="text-blue-600">
+      <label for="otherName" class="text-gray-700 text-sm">Other (Custom Name)</label>
     </div>
   `;
 
   modal.classList.remove("hidden");
-  bindCustomNameToggle(); // ⬅️ already in your code, rebinds the toggle
+  bindCustomNameToggle();
 }
 
 function showNextConflict() {
@@ -1146,8 +1174,12 @@ function showNextConflict() {
 
 
 
+let gradingStartTime;
+
 function startGrading(button = null) {
   if (totalPapers === 0) return alert("⚠️ No student papers available.");
+
+  gradingStartTime = performance.now();
 
   const mode = button?.dataset.mode || "";
 
@@ -1159,34 +1191,33 @@ function startGrading(button = null) {
 
   showProgressModal("Grading Papers with AI...", totalPapers);
 
-  function getCSRFToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
-  }
-
   fetch("{% url 'exams:grade_exam' exam.id %}", {
     method: "POST",
     headers: {
-      "X-CSRFToken": getCSRFToken(),
-      "X-Requested-With": "XMLHttpRequest",  
+      "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+      "X-Requested-With": "XMLHttpRequest",
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ mode: mode })  
+    body: JSON.stringify({ mode: mode })
   })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
         let done = 0;
-        data.results.forEach((_, i) => {
+        data.results.forEach((result, i) => {
           setTimeout(() => {
-            updateProgressModal(++done);
+            done++;
+            updateProgressModal(done);
             if (done === data.total) {
-              showToast("✅ Grading Complete!");
+              const gradingEndTime = performance.now();
+              const gradingDuration = ((gradingEndTime - gradingStartTime) / 1000).toFixed(2);
+              showToast("✅ Grading complete!");
               setTimeout(() => location.reload(), 1500);
             }
           }, i * 150);
         });
       } else {
-        alert("❌ Grading failed");
+        showToast("❌ Grading failed", 60000);
         closeProgressModal();
         if (button) {
           button.disabled = false;
@@ -1196,7 +1227,7 @@ function startGrading(button = null) {
       }
     })
     .catch(() => {
-      alert("❌ Grading request failed");
+      showToast("❌ Grading request failed", 60000);
       closeProgressModal();
       if (button) {
         button.disabled = false;
@@ -1205,7 +1236,6 @@ function startGrading(button = null) {
       }
     });
 }
-
 
 function showToast(message = "Done!") {
   const toast = document.getElementById("toastSuccess");
@@ -1298,6 +1328,7 @@ let selectedPaperIds = [];
 
 function mergeSelectedPapers() {
   selectedPaperIds = [...document.querySelectorAll(".merge-checkbox:checked")].map(cb => cb.value);
+
   if (selectedPaperIds.length < 2) {
     showToast("❌ Select at least 2 papers to merge.");
     return;
@@ -1307,91 +1338,95 @@ function mergeSelectedPapers() {
 
 function closeMergeModal() {
   document.getElementById("confirmMergeModal").classList.add("hidden");
-  document.getElementById("mergeErrorMessage").classList.add("hidden");
-  document.getElementById("mergeErrorMessage").textContent = "";
 }
 
 
 function unmergePaper() {
-  selectedPaperIds = [...document.querySelectorAll(".merge-checkbox:checked")].map(cb => cb.value);
-  if (selectedPaperIds.length !== 1) {
-    showToast("❌ Select exactly 1 paper to unmerge.");
+  const selectedCheckboxes = [...document.querySelectorAll(".merge-checkbox:checked")];
+  const uniqueStudentIds = [...new Set(selectedCheckboxes.map(cb => cb.dataset.studentId))];
+
+  if (selectedCheckboxes.length === 0) {
+    showToast("❌ Select at least 1 paper to unmerge.");
     return;
   }
+
+  if (uniqueStudentIds.length !== 1) {
+    showToast("❌ You can only unmerge papers with the SAME student ID.");
+    return;
+  }
+
   document.getElementById("confirmUnmergeModal").classList.remove("hidden");
 }
 
 function confirmUnmergeNow() {
-  const paperId = selectedPaperIds[0];
-  fetch(`/exams/unmerge/${paperId}/`, {
+  const selectedCheckboxes = [...document.querySelectorAll(".merge-checkbox:checked")];
+  const studentId = selectedCheckboxes[0]?.dataset.studentId;
+  const examId = document.getElementById("examPage").dataset.examId; // make sure this line exists
+
+  if (!studentId) {
+    showToast("❌ Cannot unmerge: missing student ID.");
+    closeUnmergeModal();
+    return;
+  }
+
+  fetch(`/exams/${examId}/unmerge-by-id/`, {
     method: "POST",
     headers: {
+      "Content-Type": "application/json",
       "X-CSRFToken": '{{ csrf_token }}',
-      "Content-Type": "application/x-www-form-urlencoded"
-    }
+    },
+    body: JSON.stringify({ student_id: studentId })
   })
-  .then(res => res.json())
+  .then(response => response.json())
   .then(data => {
-  if (data.success) {
-    closeNameConflictModal();
-    if (conflictQueue.length > 0) {
-      showNextConflict();
+    if (data.success) {
+      showToast("✅ Unmerged successfully!");
+      setTimeout(() => location.reload(), 1200);
     } else {
-      location.reload();
+      showToast("❌ " + (data.error || "Failed to unmerge."));
     }
-  } else {
-    showToast("❌ " + data.error);
-  }
-});
+    closeUnmergeModal();
+  })
+  .catch(() => {
+    showToast("❌ Error unmerging papers.");
+    closeUnmergeModal();
+  });
 }
+
 
 function closeUnmergeModal() {
   document.getElementById("confirmUnmergeModal").classList.add("hidden");
 }
 
 function confirmMergeNow() {
-  console.log("Sending papers:", selectedPaperIds);
-  fetch("{% url 'exams:merge_papers' exam.id %}", {
+  if (selectedPaperIds.length < 2) {
+    showToast("❌ Select at least 2 papers to merge.");
+    return;
+  }
+
+  fetch("{% url 'exams:merge_papers_by_id' exam.id %}", {
     method: "POST",
     headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
       "X-CSRFToken": '{{ csrf_token }}',
-      "Content-Type": "application/x-www-form-urlencoded"
     },
-    body: new URLSearchParams(selectedPaperIds.map(id => ['paper_ids', id]))
-
+    body: new URLSearchParams(selectedPaperIds.map(id => ["paper_ids", id]))
   })
-  .then(res => res.json())
+  .then(response => response.json())
   .then(data => {
-    console.log("Response from merge:", data); 
     if (data.success) {
-      location.reload();
+      showToast("✅ Papers merged successfully!");
+      setTimeout(() => location.reload(), 1200);
     } else if (data.name_conflict) {
-      document.getElementById("conflictExamId").value = "{{ exam.id }}";
-      document.getElementById("conflictPaperIds").value = data.paper_ids.join(",");
-      const optionsContainer = document.getElementById("nameOptionsList");
-      optionsContainer.innerHTML = "";
-
-      data.name_options.forEach((name, index) => {
-        const id = "nameOpt" + index;
-        optionsContainer.innerHTML += `
-          <label class="flex items-center gap-2 text-sm">
-            <input type="radio" name="selected_name" value="${name}" class="accent-blue-600"> ${name}
-          </label>`;
-      });
-
-      optionsContainer.innerHTML += `
-        <label class="flex items-center gap-2 text-sm">
-          <input type="radio" name="selected_name" value="other" class="accent-blue-600"> Other
-        </label>`;
-
-      // ✅ Bind change listener to show/hide input
-      bindCustomNameToggle();
-
-      document.getElementById("nameConflictModal").classList.remove("hidden");
+      showNameConflictModal(data.name_options, data.paper_ids);
     } else {
-      closeMergeModal(); 
-      showToast(data.error || "❌ Failed to merge papers.");
+      showToast("❌ " + (data.error || "Failed to merge papers."));
     }
+    closeMergeModal();
+  })
+  .catch(() => {
+    showToast("❌ Error merging papers.");
+    closeMergeModal();
   });
 }
 
@@ -1480,15 +1515,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function bindCustomNameToggle() {
   document.querySelectorAll("input[name='selected_name']").forEach(radio => {
-    radio.addEventListener("change", function () {
+    radio.addEventListener("change", () => {
       const customInput = document.getElementById("customNameInput");
-      if (this.value.toLowerCase() === "other") {
+      if (radio.value === "other") {
         customInput.disabled = false;
-        customInput.parentElement.classList.remove("hidden"); // Show input
+        customInput.parentElement.classList.remove("hidden");
         customInput.focus();
       } else {
         customInput.disabled = true;
-        customInput.parentElement.classList.add("hidden"); // Hide input
+        customInput.parentElement.classList.add("hidden");
         customInput.value = "";
       }
     });
@@ -1565,6 +1600,45 @@ function openFeedbackModal(paperId) {
 function closeFeedbackModal() {
   document.getElementById("feedbackModal").classList.add("hidden");
 }
+
+function openDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.remove('hidden');
+  }
+
+  function closeDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.add('hidden');
+  }
+
+  document.getElementById("deleteAllForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  fetch("{% url 'exams:delete_all_papers' exam.id %}", {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": '{{ csrf_token }}',
+      "X-Requested-With": "XMLHttpRequest"
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      closeDeleteAllModal();
+      showToast("✅ " + data.message);
+
+      const paperList = document.querySelector(".student-papers-container");
+      if (paperList) {
+        paperList.innerHTML = `
+          <p class="text-sm text-gray-500">No student papers uploaded yet.</p>
+        `;
+      }
+
+      const rows = document.querySelectorAll("#gradesTable tbody tr");
+      rows.forEach(row => row.remove());
+    } else {
+      showToast("❌ " + (data.error || "Failed to delete papers."));
+    }
+  });
+});
 
 </script>
 
