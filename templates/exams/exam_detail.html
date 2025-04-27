@@ -436,12 +436,12 @@
                           <!-- Grade Individually Button -->
                           {% if user.is_instructor %}
                           <td class="py-3 px-6 text-center">
-                            <form method="POST" action="{% url 'exams:grade_one_student' exam.id paper.id %}">
+                            <form id="gradeForm-{{ paper.id }}" data-paper-id="{{ paper.id }}" data-exam-id="{{ exam.id }}">
                               {% csrf_token %}
-                              <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-sm rounded shadow flex items-center gap-1">
+                              <button type="button" onclick="gradeSingleStudent('{{ exam.id }}', '{{ paper.id }}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 text-sm rounded shadow flex items-center gap-1">
                                 <i data-lucide="plus-circle" class="w-4 h-4"></i> Grade
                               </button>
-                            </form>
+                            </form>                            
                             {% endif %}
                           </td>
                       </tr>
@@ -1105,7 +1105,6 @@ function uploadPapers(files) {
     });
 }
 
-
 function showNameConflictModal(nameOptions, paperIds) {
   const modal = document.getElementById("nameConflictModal");
   const optionsList = document.getElementById("nameOptionsList");
@@ -1236,6 +1235,38 @@ function startGrading(button = null) {
       }
     });
 }
+
+function gradeSingleStudent(examId, paperId) {
+  showProgressModal("Grading Student Paper...", 1);
+
+  fetch(`/exams/${examId}/grade/student/${paperId}/`, {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": '{{ csrf_token }}',
+      "X-Requested-With": "XMLHttpRequest",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({}) 
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      updateProgressModal(1);
+      setTimeout(() => {
+        showToast("✅ Graded successfully!");
+        location.reload();
+      }, 1500);
+    } else {
+      showToast("❌ Grading failed");
+      closeProgressModal();
+    }
+  })
+  .catch(error => {
+    showToast("❌ Error during grading");
+    closeProgressModal();
+  });
+}
+
 
 function showToast(message = "Done!") {
   const toast = document.getElementById("toastSuccess");

@@ -21,6 +21,7 @@ from utils.utils import extract_text_from_pdf, extract_name_and_id
 from django.core.mail import EmailMessage
 from django.http import FileResponse
 from .utils import get_grading_stage_text
+from collections import defaultdict
 
 @login_required
 def exam_list_view(request):
@@ -514,8 +515,8 @@ def grade_individual_student(request, exam_id, paper_id):
         p.save()
 
     exam.update_status()
-    messages.success(request, f"✅ Graded: {student.get_full_name() if student else 'Unmatched'}")
-    return redirect("exams:detail", exam_id=exam.id)
+
+    return JsonResponse({"success": True})
 
 @require_POST
 @login_required

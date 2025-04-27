@@ -14,34 +14,44 @@ def grade_answer(question, student_text, solution_text, marks, eval_type="strict
         "custom": custom_note.strip() or "Use your judgment to grade this based on the instructor's custom criteria.",
     }
 
-    # Objective-specific instructions
     if question_type in ["true_false", "mcq"]:
-        objective_notes = """
-        - Accept answers like "A", "B", "C", or "D" regardless of case (e.g., "a" = "A") (for MCQ).
-        - Accept "T", "True", "✓", "✔️" or "F", "False", "X", "✖️" (for True/False).
-        - Only accept one final answer. If student writes multiple (e.g., "A and B"), mark as unclear.
-        - If the answer is ambiguous or doesn't match expected format, include "REQUIRES ATTENTION" in your feedback.
-        - Provide a short and clear judgment: Correct ✅, Incorrect ❌, or Unclear ⚠️.
-        """
+        prompt = f"""
+You are an AI grading assistant for {question_type.upper()} questions.
+
+IMPORTANT:
+- Only consider the **first clear answer** given by the student.
+- Ignore any explanations, comments, or sentences after the first answer.
+- Match as follows:
+    - For True/False:
+        - "T", "True", "✓", "✔️" → True
+        - "F", "False", "✖️", "X" → False
+    - For MCQ:
+        - "A", "B", "C", or "D" (case insensitive)
+- If multiple answers (e.g., "A and B") appear in the first few words, mark it ⚠️ REQUIRES ATTENTION.
+- If answer is unclear or missing, also mark it ⚠️ REQUIRES ATTENTION.
+- Do not overthink explanations. Just match the answer against the solution.
+
+Return your output ONLY in this strict format:
+Score: x/{marks}
+Feedback: Correct ✅, Incorrect ❌, or ⚠️ REQUIRES ATTENTION.
+
+Question: {question}
+Student Answer: {student_text}
+Solution Text: {solution_text}
+""".strip()
     else:
-        objective_notes = ""
-
-    # Dynamic temperature
-    temperature = 0.2 if question_type in ["true_false", "mcq"] else 0.5
-
-    prompt = f"""
+        prompt = f"""
 You are an AI grading assistant.
 
 IMPORTANT:
 - The Solution Text is 100% correct.
-- Do NOT use external knowledge or assume anything.
-- If unsure how to grade or if the student answer is ambiguous (e.g., "A and B"), include "REQUIRES ATTENTION".
+- Do NOT use external knowledge or assume anything outside the solution.
+- Evaluate fairly based on the student's explanation quality.
 
 Evaluation Type: {eval_type}
 {eval_instructions[eval_type]}
-{objective_notes.strip()}
 
-Return ONLY in this format:
+Return your output ONLY in this format:
 Score: x/{marks}
 Feedback: [Your clear feedback here.]
 
@@ -49,6 +59,8 @@ Question: {question}
 Student Answer: {student_text}
 Solution Text: {solution_text}
 """.strip()
+
+    temperature = 0.2 if question_type in ["true_false", "mcq"] else 0.5
 
     try:
         response = client.chat.completions.create(
@@ -60,7 +72,6 @@ Solution Text: {solution_text}
     except Exception as e:
         return f"Score: 0/{marks}\nFeedback: Error: {str(e)}"
 
-    
 def parse_score_and_feedback(response_text, marks, question_number=None):
     try:
         score_match = re.search(r"Score:\s*(\d+(?:\.\d+)?)\s*/\s*\d+", response_text)
