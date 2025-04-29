@@ -22,6 +22,7 @@ from django.core.mail import EmailMessage
 from django.http import FileResponse
 from .utils import get_grading_stage_text
 from collections import defaultdict
+from datetime import datetime
 
 @login_required
 def exam_list_view(request):
@@ -885,10 +886,16 @@ def generate_exam_pdf(request, exam_id):
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     margin_bottom = 80
-    y = height - 100
+    max_text_width = width - 100
     q_number = 1
     page_number = 1
-    max_text_width = width - 100
+
+    def draw_header():
+        p.setFont("Helvetica-Bold", 18)
+        p.drawCentredString(width / 2, height - 40, f"{exam.name} - Exam Paper")
+        p.setFont("Helvetica", 12)
+        p.drawString(50, height - 70, "Student Name: ____________________________")
+        p.drawString(350, height - 70, "Student ID: ______________________")
 
     def draw_footer():
         p.setFont("Helvetica-Oblique", 9)
@@ -902,11 +909,13 @@ def generate_exam_pdf(request, exam_id):
         draw_footer()
         p.showPage()
         page_number += 1
-        y = height - 100
+        draw_header()
+        y = height - 120
 
     def section_header(title, instruction):
         nonlocal y
-        if y < 130: next_page()
+        if y < 130:
+            next_page()
         p.setFont("Helvetica-Bold", 14)
         p.drawString(50, y, f"■ {title}")
         y -= 16
@@ -916,12 +925,8 @@ def generate_exam_pdf(request, exam_id):
         p.setFillColorRGB(0, 0, 0)
         y -= 20
 
-    # Header
-    p.setFont("Helvetica-Bold", 18)
-    p.drawCentredString(width / 2, height - 50, f"{exam.name} - Exam Paper")
-    p.setFont("Helvetica", 12)
-    p.drawString(50, height - 80, "Student Name: ____________________________")
-    p.drawString(350, height - 80, "Student ID: ______________________")
+    # Draw header for first page
+    draw_header()
     y = height - 120
 
     grouped = {
@@ -936,8 +941,10 @@ def generate_exam_pdf(request, exam_id):
     if grouped["true_false"]:
         section_header("True/False Questions", "Write 'True' or 'False' clearly in the box.")
         for q in grouped["true_false"]:
-            if y < margin_bottom + 40: next_page()
+            if y < margin_bottom + 40:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
+            y -= 10  # Add margin between question and box
             p.rect(width - 90, y + 5, 35, 15)
             y -= 20
             q_number += 1
@@ -945,18 +952,20 @@ def generate_exam_pdf(request, exam_id):
     if grouped["mcq"]:
         section_header("Multiple Choice Questions", "Write the letter of the correct option.")
         for q in grouped["mcq"]:
-            if y < margin_bottom + 55: next_page()
+            if y < margin_bottom + 55:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             opt_line = "    ".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(q.get_mcq_options())])
-            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width)
+            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width - 70)
             p.rect(width - 90, y + 5, 35, 15)
-            y -= 20
+            y -= 30
             q_number += 1
 
     if grouped["short_answer"]:
         section_header("Short Answer Questions", "Write your answer inside the box.")
         for q in grouped["short_answer"]:
-            if y < margin_bottom + 90: next_page()
+            if y < margin_bottom + 90:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             p.setDash(1, 2)
             p.rect(50, y - 60, width - 100, 60)
@@ -967,7 +976,8 @@ def generate_exam_pdf(request, exam_id):
     if grouped["long_answer"]:
         section_header("Long Answer Questions", "Write your detailed response below.")
         for q in grouped["long_answer"]:
-            if y < margin_bottom + 150: next_page()
+            if y < margin_bottom + 150:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             p.rect(50, y - 120, width - 100, 120)
             y -= 140
@@ -1020,78 +1030,89 @@ def generate_answered_pdf(request, exam_id):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
+    margin_bottom = 80
     max_text_width = width - 100
-    top_margin = 60
-    bottom_margin = 80
-    y = height - top_margin
     q_number = 1
-    page_num = 1
+    page_number = 1
+
+    def draw_header():
+        p.setFont("Helvetica-Bold", 18)
+        p.drawCentredString(width / 2, height - 40, f"{exam.name} - Answered Module")
+        p.setFont("Helvetica", 12)
+        p.drawString(50, height - 70, "Student Name: ____________________________")
+        p.drawString(350, height - 70, "Student ID: ______________________")
 
     def draw_footer():
         p.setFont("Helvetica-Oblique", 9)
         p.setFillColorRGB(0.4, 0.4, 0.4)
         p.drawString(50, 20, f"Instructor: {exam.instructor.username}  |  Course: {exam.course.name}")
-        p.drawRightString(width - 50, 20, f"Page {page_num}")
+        p.drawRightString(width - 50, 20, f"Page {page_number}")
         p.setFillColorRGB(0, 0, 0)
 
     def next_page():
-        nonlocal y, page_num
+        nonlocal y, page_number
         draw_footer()
         p.showPage()
-        page_num += 1
-        y = height - top_margin
+        page_number += 1
+        draw_header()
+        y = height - 120
 
-    def ensure_space(required_height):
+    def section_header(title, instruction):
         nonlocal y
-        if y - required_height < bottom_margin:
+        if y < 130:
             next_page()
-
-    def section_header(title):
-        nonlocal y
-        ensure_space(40)
         p.setFont("Helvetica-Bold", 14)
         p.drawString(50, y, f"■ {title}")
+        y -= 16
+        p.setFont("Helvetica-Oblique", 9)
+        p.setFillColorRGB(0.5, 0, 0)
+        p.drawString(50, y, f"* {instruction}")
+        p.setFillColorRGB(0, 0, 0)
         y -= 20
 
+    # Start on first page
+    draw_header()
+    y = height - 120
+
     grouped = {
-        "true_false": [], "mcq": [], "short_answer": [], "long_answer": []
+        "true_false": [],
+        "mcq": [],
+        "short_answer": [],
+        "long_answer": []
     }
     for q in questions:
         grouped[q.question_type].append(q)
 
-    # Title
-    p.setFont("Helvetica-Bold", 18)
-    p.drawCentredString(width / 2, y, f"{exam.name} - Answered Module")
-    y -= 30
-
     # True/False
     if grouped["true_false"]:
-        section_header("True/False Questions")
+        section_header("True/False Questions", "Write 'True' or 'False' clearly in the box.")
         for q in grouped["true_false"]:
             question_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width) + 45
-            ensure_space(question_height)
+            if y < margin_bottom + question_height:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
+            y -= 10  
             p.rect(width - 90, y + 5, 35, 15)
             p.setFont("Helvetica-Bold", 11)
             p.setFillColorRGB(0.2, 0.4, 0.9)
-            p.drawString(width - 85, y + 7, q.correct_answer[:15])
+            p.drawString(width - 85, y + 7, q.correct_answer or ''[:15])
             p.setFillColorRGB(0, 0, 0)
-            y -= 35
+            y -= 20
             q_number += 1
 
     # MCQ
     if grouped["mcq"]:
-        section_header("Multiple Choice Questions")
+        section_header("Multiple Choice Questions", "Write the letter of the correct option.")
         for q in grouped["mcq"]:
             opt_line = "    ".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(q.get_mcq_options())])
             q_height = (
                 estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width) +
-                estimate_height(opt_line, max_text_width, font_size=11) +
-                60
+                estimate_height(opt_line, max_text_width, font_size=11) + 60
             )
-            ensure_space(q_height)
+            if y < margin_bottom + q_height:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width, font_size=11)
+            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width - 70, font_size=11)
             y -= 10
             p.rect(width - 90, y + 5, 35, 15)
             p.setFont("Helvetica-Bold", 11)
@@ -1101,36 +1122,38 @@ def generate_answered_pdf(request, exam_id):
             y -= 30
             q_number += 1
 
-   # Short Answer
+    # Short Answer
     if grouped["short_answer"]:
-        section_header("Short Answer Questions")
+        section_header("Short Answer Questions", "Write your answer inside the box.")
         for q in grouped["short_answer"]:
             text_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            answer_height = estimate_height(q.correct_answer or "", width - 110, font_size=11)
+            answer_height = estimate_height(q.correct_answer or "", max_text_width - 20, font_size=11)
             total_height = text_height + answer_height + 90
-            ensure_space(total_height)
+            if y < margin_bottom + total_height:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             p.setDash(1, 2)
             p.rect(50, y - 60, width - 100, 60)
             p.setDash()
             y = draw_wrapped_text(p, 55, y - 20, q.correct_answer or "", width - 110,
-                                font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
-            y -= 50  
+                                  font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
+            y -= 50
             q_number += 1
 
     # Long Answer
     if grouped["long_answer"]:
-        section_header("Long Answer Questions")
+        section_header("Long Answer Questions", "Write your detailed response below.")
         for q in grouped["long_answer"]:
             text_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             answer_height = estimate_height(q.correct_answer or "", width - 110, font_size=11)
             total_height = text_height + answer_height + 150
-            ensure_space(total_height)
+            if y < margin_bottom + total_height:
+                next_page()
             y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
             p.rect(50, y - 120, width - 100, 120)
             y = draw_wrapped_text(p, 55, y - 20, q.correct_answer or "", width - 110,
-                                font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
-            y -= 80  
+                                  font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
+            y -= 80
             q_number += 1
 
     draw_footer()
@@ -1138,7 +1161,15 @@ def generate_answered_pdf(request, exam_id):
     buffer.seek(0)
     return FileResponse(buffer, as_attachment=True, filename=f"{exam.name}_AnsweredModule.pdf")
 
-from datetime import datetime
+@csrf_exempt
+def preview_exam_pdf(request):
+    from .utils import generate_exam_pdf_from_data
+    return generate_exam_pdf_from_data(request)
+
+@csrf_exempt
+def preview_answered_pdf(request):
+    from .utils import generate_answered_pdf_from_data
+    return generate_answered_pdf_from_data(request)
 
 @login_required
 @require_POST

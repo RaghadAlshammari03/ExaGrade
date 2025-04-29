@@ -2,25 +2,11 @@
 {% load static %}
 
 {% block content %}
-<div class="min-h-screen flex flex-col items-center justify-center px-6 py-10">
-  <div class="max-w-5xl w-full bg-white shadow-2xl rounded-3xl overflow-hidden transition-all">
-
-    <!-- Header -->
-    <div class="bg-white border-b px-8 py-6 rounded-t-3xl flex justify-between items-center">
-      <h1 class="text-3xl font-bold text-gray-800 flex items-center gap-2">
-        {% if exam %}Edit{% else %}Create New{% endif %} Exam
-      </h1>
-      {% if exam %}
-      <form method="post" action="{% url 'exams:send_grades' exam.id %}">
-        {% csrf_token %}
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md shadow-md flex items-center gap-2">
-          <i data-lucide="send" class="w-4 h-4"></i> Send Grades
-        </button>
-      </form>
-      {% endif %}
-    </div>
+<div class="min-h-screen flex flex-col px-6 py-10">
+  <div class="flex flex-col lg:flex-row items-start gap-8 w-full max-w-7xl mx-auto">
 
     <!-- Exam Form -->
+    <div class="w-full md:w-1/2 bg-white shadow-2xl rounded-3xl overflow-hidden transition-all p-6">
     <form method="post" action="{% if exam %}?edit={{ exam.id }}{% endif %}" class="pt-0 pb-8 px-8 space-y-6" id="examForm">
       {% csrf_token %}
 
@@ -43,6 +29,7 @@
             <option value="{{ course.id }}" {% if exam and exam.course.id == course.id %}selected{% endif %}>{{ course.name }}</option>
             {% endfor %}
           </select>
+          <input type="hidden" name="course_name" id="course_name_input">
         </div>
       </div>
 
@@ -53,12 +40,6 @@
           <input type="number" id="total_marks" name="total_marks" required placeholder="Enter total marks"
             value="{{ exam.total_marks|default:'' }}"
             class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" readonly>
-        </div>
-        <div>
-          <label class="text-gray-700 text-base font-medium">Exam Duration (Optional)</label>
-          <input type="number" name="exam_time" placeholder="Time in minutes"
-            value="{{ exam.duration_minutes|default:'' }}"
-            class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
         </div>
       </div>
 
@@ -109,7 +90,13 @@
           <input type="text" name="mcq_options_2[]" value="{{ q.option_list.1 }}" placeholder="Option 2" required class="w-full px-3 py-2 border rounded mb-1">
           <input type="text" name="mcq_options_3[]" value="{{ q.option_list.2 }}" placeholder="Option 3" required class="w-full px-3 py-2 border rounded mb-1">
           <input type="text" name="mcq_options_4[]" value="{{ q.option_list.3 }}" placeholder="Option 4" required class="w-full px-3 py-2 border rounded mb-2">
-          <input type="text" name="mcq_answers[]" value="{{ q.correct_answer }}" placeholder="Correct Answer" required class="w-full px-3 py-2 border rounded mb-2">
+          <select name="mcq_answers[]" required class="w-full px-3 py-2 border rounded mb-2">
+            <option value="">Select Correct Answer</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+          </select>          
           <input type="number" name="mcq_marks[]" value="{{ q.marks }}" required class="w-full px-3 py-2 border rounded" placeholder="Marks">
         </div>
         {% endfor %}
@@ -175,10 +162,30 @@
         </button>            
       </form>
     </div>
+  </div>
+
+  <!-- Live Preview -->
+  <div class="w-full lg:w-1/2 sticky top-10 self-start bg-gray-50 rounded-3xl p-6 shadow-2xl overflow-hidden h-fit">
+
+    <!-- Buttons to switch between Exam and Answer modual -->
+    <div class="flex justify-center mb-6">
+      <button id="showExamModule" class="px-6 py-2 bg-blue-600 text-white rounded-l-lg text-sm font-semibold">Exam Paper</button>
+      <button id="showAnswerModule" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-r-lg text-sm font-semibold">Answer Module</button>
+    </div>
+
+    <!-- Preview Area -->
+    <div id="livePreviewContainer" class="w-full h-[85vh] border rounded-xl shadow-inner bg-white flex justify-center items-center">
+      <canvas id="pdfCanvas" class="w-full rounded-xl shadow-inner bg-white"></canvas>
+    </div>
 </div>
 
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+
+
 <script>
-  // Handle Eval Dropdowns Once
   function attachEvalDropdownListeners(scope = document) {
     scope.querySelectorAll('.eval-dropdown').forEach(dropdown => {
       dropdown.addEventListener('change', function () {
@@ -186,7 +193,6 @@
         textarea.style.display = this.value === 'custom' ? 'block' : 'none';
       });
   
-      // Show on load if needed
       if (dropdown.value === 'custom') {
         dropdown.nextElementSibling.style.display = 'block';
       }
@@ -194,22 +200,22 @@
   }
   attachEvalDropdownListeners();
   
-  // Lucide Icons Refresh
   function refreshIcons() {
     if (window.lucide) {
       window.lucide.createIcons();
     }
   }
   
-  // Remove Block
   function removeBlock(button) {
     const parentBtn = button.closest('button');
     const block = parentBtn.closest('.question-block');
     if (block) {
-      block.remove();
-      updateTotalMarks();
+        block.remove();
+        updateTotalMarks();
+        refreshPreview(); 
     }
-  }
+}
+
 
   document.addEventListener('DOMContentLoaded', function () {
     if (window.lucide) {
@@ -218,7 +224,6 @@
   });
 
   
-  // Update Total Marks
   function updateTotalMarks() {
     let total = 0;
     const markInputs = document.querySelectorAll('#questions_container input[name$="_marks[]"]');
@@ -229,14 +234,12 @@
     document.getElementById('total_marks').value = total;
   }
   
-  // Attach Input Listener
   function attachMarksListener(container) {
     container.querySelectorAll('input[name$="_marks[]"]').forEach(input => {
       input.addEventListener('input', updateTotalMarks);
     });
   }
   
-  // Add Question Templates
   function createQuestionBlock(type, color, content) {
     const container = document.createElement('div');
     container.className = `question-block relative p-4 border rounded-xl ${color}`;
@@ -275,7 +278,13 @@
       <input type="text" name="mcq_options_2[]" required placeholder="Option 2" class="w-full px-3 py-2 border rounded mb-1">
       <input type="text" name="mcq_options_3[]" required placeholder="Option 3" class="w-full px-3 py-2 border rounded mb-1">
       <input type="text" name="mcq_options_4[]" required placeholder="Option 4" class="w-full px-3 py-2 border rounded mb-2">
-      <input type="text" name="mcq_answers[]" required placeholder="Correct Answer" class="w-full px-3 py-2 border rounded mb-2">
+      <select name="mcq_answers[]" required class="w-full px-3 py-2 border rounded mb-2">
+        <option value="">Select Correct Answer</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+      </select>
       <input type="number" name="mcq_marks[]" required placeholder="Marks" class="w-full px-3 py-2 border rounded">
     `);
   });
@@ -319,6 +328,133 @@
         placeholder="Custom grading instructions" style="display:none;"></textarea>
     `);
   });
+
+  let showAnswers = false;
+
+document.getElementById('showExamModule').addEventListener('click', function () {
+  showAnswers = false;
+  refreshPreview();
+  this.classList.add('bg-blue-600', 'text-white');
+  this.classList.remove('bg-gray-300', 'text-gray-800');
+  document.getElementById('showAnswerModule').classList.remove('bg-blue-600', 'text-white');
+  document.getElementById('showAnswerModule').classList.add('bg-gray-300', 'text-gray-800');
+});
+
+document.getElementById('showAnswerModule').addEventListener('click', function () {
+  showAnswers = true;
+  refreshPreview();
+  this.classList.add('bg-blue-600', 'text-white');
+  this.classList.remove('bg-gray-300', 'text-gray-800');
+  document.getElementById('showExamModule').classList.remove('bg-blue-600', 'text-white');
+  document.getElementById('showExamModule').classList.add('bg-gray-300', 'text-gray-800');
+});
+
+
+document.addEventListener('input', function (e) {
+  if (e.target.closest('#questions_container')) {
+    refreshPreview();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  refreshPreview();
+});
+
+let typingTimer;
+const doneTypingInterval = 500; 
+let renderTask = null;
+
+const examForm = document.getElementById('examForm');
+const showExamModule = document.getElementById('showExamModule');
+const showAnswerModule = document.getElementById('showAnswerModule');
+const livePreviewFrame = document.getElementById('livePreviewFrame');
+
+let currentMode = "exam"; 
+
+async function refreshPreview() {
+  const formData = new FormData(examForm);
+  const endpoint = currentMode === "exam"
+    ? "{% url 'exams:preview_exam_pdf' %}"
+    : "{% url 'exams:preview_answered_pdf' %}";
+
+  const scrollPosition = window.scrollY;
+
+  try {
+    const response = await fetch(endpoint, { method: "POST", body: formData });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    const pdf = await pdfjsLib.getDocument(url).promise;
+    const page = await pdf.getPage(1);
+
+    const canvas = document.getElementById('pdfCanvas');
+    const context = canvas.getContext('2d');
+
+    const viewport = page.getViewport({ scale: 1.5 });  
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const renderContext = { canvasContext: context, viewport: viewport };
+
+    if (renderTask) {
+      await renderTask.cancel();
+    }
+
+    renderTask = page.render(renderContext);
+    await renderTask.promise;
+
+    setTimeout(() => window.scrollTo(0, scrollPosition), 10);
+
+  } catch (error) {
+    console.warn('PDF Preview suppressed:', error.message);
+  }
+}
+
+
+function refreshButtonStyles() {
+  if (currentMode === "exam") {
+    showExamModule.classList.add('bg-blue-600', 'text-white');
+    showExamModule.classList.remove('bg-gray-300', 'text-gray-800');
+    showAnswerModule.classList.remove('bg-blue-600', 'text-white');
+    showAnswerModule.classList.add('bg-gray-300', 'text-gray-800');
+  } else {
+    showAnswerModule.classList.add('bg-blue-600', 'text-white');
+    showAnswerModule.classList.remove('bg-gray-300', 'text-gray-800');
+    showExamModule.classList.remove('bg-blue-600', 'text-white');
+    showExamModule.classList.add('bg-gray-300', 'text-gray-800');
+  }
+}
+
+showExamModule.addEventListener('click', () => {
+  currentMode = "exam";
+  refreshButtonStyles();
+  refreshPreview();
+});
+
+showAnswerModule.addEventListener('click', () => {
+  currentMode = "answer";
+  refreshButtonStyles();
+  refreshPreview();
+});
+
+examForm.addEventListener('input', () => {
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    refreshPreview();
+  }, doneTypingInterval);
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  refreshButtonStyles();
+  refreshPreview();
+});
+
+document.querySelector('select[name="course"]').addEventListener('change', function () {
+    const selectedText = this.options[this.selectedIndex].text;
+    document.getElementById('course_name_input').value = selectedText;
+});
+
 </script>  
 
 {% if deleted_questions_count %}

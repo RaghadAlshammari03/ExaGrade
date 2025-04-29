@@ -30,4 +30,6 @@ urlpatterns = [
     path('<int:exam_id>/grade/student/<int:paper_id>/', views.grade_individual_student, name='grade_one_student'),
     path('exam/<int:exam_id>/delete-all-papers/', views.delete_all_papers, name='delete_all_papers'),
     path("resolve-flag/<int:issue_id>/", views.resolve_flag, name="resolve_flag"),
+    path('preview-exam-pdf/', views.preview_exam_pdf, name='preview_exam_pdf'),
+    path('preview-answered-pdf/', views.preview_answered_pdf, name='preview_answered_pdf'),
 ]
