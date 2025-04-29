@@ -211,20 +211,39 @@
 
     <!-- Student Performance Overview Table -->
     <div class="mt-10">
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-4 mt-4">
-        <!-- 🔍 Search Input -->
-        <input id="searchInput" type="text" placeholder="Search by name or ID..." class="border border-gray-300 px-3 py-1.5 rounded-md text-sm focus:ring focus:border-blue-400" />
+      <div class="flex flex-wrap justify-between items-center gap-4 mb-3 mt-6">
+  
+        <!-- Search and Filter -->
+        <div class="flex flex-wrap items-center gap-3">
+          <input id="searchInput" type="text" placeholder="Search by name or ID..." class="border border-gray-300 px-3 py-2 rounded-md text-sm focus:ring focus:border-blue-400" />
+        
+          <select id="badgeFilterDropdown" onchange="applyBadgeFilter()" class="border border-gray-300 px-3 py-2 rounded-md text-sm text-gray-700 focus:ring focus:border-blue-400">
+            <option value="all">Filter by Status</option>
+            <option value="Ungraded">Ungraded</option>
+            <option value="Enrolled">Enrolled</option>
+            <option value="Not Enrolled">Not Enrolled</option>
+            <option value="⚠️ Review Needed">⚠️ Review Needed</option>
+            <option value="Merged">Merged</option>
+          </select>
+        </div>
       
-        <!-- 🏷️ Badge Filter Dropdown -->
-        <select id="badgeFilterDropdown" onchange="applyBadgeFilter()" class="border border-gray-300 px-3 py-1.5 rounded-md text-sm text-gray-700 focus:ring focus:border-blue-400">
-          <option value="all">Filter by Status</option>
-          <option value="Ungraded">Ungraded</option>
-          <option value="Enrolled">Enrolled</option>
-          <option value="Not Enrolled">Not Enrolled</option>
-          <option value="⚠️ Review Needed">⚠️ Review Needed</option>
-          <option value="Merged">Merged</option>
-        </select>
-      </div>   
+        <!-- Export CSV Button -->
+        <div>
+          {% if student_papers %}
+          <button onclick="openExportCsvModal()"
+              class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-md">
+              <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+          </button>
+          {% else %}
+          <button disabled
+              class="bg-green-400 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-md opacity-60 cursor-not-allowed"
+              title="Upload student papers to enable CSV export">
+              <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+          </button>
+          {% endif %}
+        </div>
+      
+      </div>         
         
       <div class="overflow-x-auto rounded-lg shadow border">
         <table id="gradesTable" class="min-w-full border bg-white text-sm">      
@@ -579,6 +598,61 @@
     </div>
   </div>
 
+  <div id="exportCsvModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 relative">
+      <button onclick="closeExportCsvModal()" class="absolute top-3 right-4 text-gray-400 hover:text-red-500">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      
+      <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <i data-lucide="download" class="w-5 h-5 text-green-600"></i> Export CSV Options
+      </h2>
+  
+      <form id="exportCsvForm">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="columns" value="Student" class="rounded text-green-600" checked>
+            Student Name
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="columns" value="ID" class="rounded text-green-600" checked>
+            Student ID
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="columns" value="Grade" class="rounded text-green-600" checked>
+            Grade
+          </label>
+  
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="columns" value="Instructor Feedback" class="rounded text-green-600">
+            Instructor Feedback
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="columns" value="AI Feedback" class="rounded text-green-600">
+            AI Feedback
+          </label>
+        </div>
+
+        <div class="mb-4">
+          <label for="sortOption" class="block text-sm font-semibold text-gray-700 mb-1">Sort By (Optional)</label>
+          <select id="sortOption" class="border border-gray-300 px-3 py-2 rounded-md text-sm text-gray-700 focus:ring focus:border-blue-400">
+            <option value="">No Sorting</option>
+            <option value="name">Student Name</option>
+            <option value="id">Student ID</option>
+          </select>
+        </div>        
+  
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="closeExportCsvModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-sm rounded-lg">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-green-600 text-white hover:bg-green-700 text-sm rounded-lg flex items-center gap-2">
+            <i data-lucide="download-cloud" class="w-4 h-4"></i> Export Now
+          </button>
+        </div>
+      </form>
+  
+    </div>
+  </div>  
+  
 <!-- DELETE PAPER MODAL -->
 <div id="deletePaperModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-40 flex items-center justify-center">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative animate-fade-in-down">
@@ -1670,6 +1744,148 @@ function openDeleteAllModal() {
     }
   });
 });
+
+function exportTableToCSV() {
+  const table = document.getElementById("gradesTable");
+  let csv = [];
+
+  const headers = [...table.querySelectorAll("thead th")]
+    .map(th => th.innerText.trim())
+    .filter(text => text);  
+  csv.push(headers.join(","));
+
+  table.querySelectorAll("tbody tr").forEach(row => {
+    const rowData = [...row.querySelectorAll("td")]
+      .map(td => {
+        const textarea = td.querySelector("textarea");
+        const text = textarea ? textarea.value : td.innerText;
+        return `"${text.trim().replace(/"/g, '""')}"`;
+      });
+    csv.push(rowData.join(","));
+  });
+
+  const csvString = csv.join("\n");
+  const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `Exam_{{ exam.name|slugify }}_Grades.csv`;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function openExportCsvModal() {
+  document.getElementById("exportCsvModal").classList.remove("hidden");
+}
+
+function closeExportCsvModal() {
+  document.getElementById("exportCsvModal").classList.add("hidden");
+}
+
+document.getElementById("exportCsvForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const selectedColumns = [...document.querySelectorAll('input[name="columns"]:checked')].map(cb => cb.value);
+  if (selectedColumns.length === 0) {
+    showToast("❌ Please select at least one column.");
+    return;
+  }
+
+  const sortBy = document.getElementById("sortOption").value;
+  const table = document.getElementById("gradesTable");
+  let rows = Array.from(table.querySelectorAll("tbody tr"));
+
+  // Sort if needed
+  if (sortBy === "name") {
+    rows.sort((a, b) => {
+      const nameA = a.querySelector(".student-name")?.innerText.trim().toLowerCase() || "";
+      const nameB = b.querySelector(".student-name")?.innerText.trim().toLowerCase() || "";
+      return nameA.localeCompare(nameB);
+    });
+  } else if (sortBy === "id") {
+    rows.sort((a, b) => {
+      const idA = a.querySelector("td:nth-child(3)")?.innerText.trim() || "";
+      const idB = b.querySelector("td:nth-child(3)")?.innerText.trim() || "";
+      return idA.localeCompare(idB, undefined, { numeric: true });
+    });
+  }
+
+  let csv = [];
+  csv.push(selectedColumns.join(","));
+
+  rows.forEach(row => {
+    let rowData = [];
+
+    const paperId = row.querySelector("form")?.getAttribute("data-paper-id");
+    const paperData = feedbackMap.find(p => p.id == paperId);
+
+    selectedColumns.forEach(col => {
+      let cellValue = "";
+
+      if (col === "Student") {
+        const nameSpan = row.querySelector(".student-name span");
+        const nameText = nameSpan?.innerText.trim();
+        cellValue = (nameText && nameText.toLowerCase() !== "empty") ? nameText : "";
+      }
+
+      else if (col === "ID") {
+        const idText = row.querySelector("td:nth-child(3)")?.innerText.trim();
+        cellValue = (idText && idText !== "—") ? idText : "";
+      }
+
+      else if (col === "Grade") {
+        let gradeText = row.querySelector(".grade-cell > div")?.innerText.trim() || "";
+        cellValue = gradeText.replace(/Score:\s*/i, "").trim();
+      }
+
+      else if (col === "Instructor Feedback") {
+        const p = row.querySelector("td:nth-child(8) p");
+        const raw = p?.textContent?.trim() || "";
+        cellValue = (!raw || raw === "—" || raw.includes("::")) ? "" : raw;
+      }
+
+      else if (col === "AI Feedback") {
+        if (paperData && paperData.graded_questions?.length > 0) {
+          const stripHtml = (html) => {
+            const div = document.createElement("div");
+            div.innerHTML = html;
+            const text = div.textContent || div.innerText || "";
+            return text.replace(/✅|❌|⚠️|::|â€¢|â€Œ|[\u200B-\u200D]/g, "").trim();
+          };
+
+          const feedbackLines = paperData.graded_questions.map(q => {
+            const cleanFeedback = stripHtml(q.feedback).replace(/\s+/g, " ");
+            return `${q.question}: ${cleanFeedback}`;
+          });
+
+          cellValue = feedbackLines.join(" | ");
+        } else {
+          cellValue = "";
+        }
+      }
+
+      rowData.push(`"${cellValue.replace(/"/g, '""')}"`);
+    });
+
+    csv.push(rowData.join(","));
+  });
+
+  const csvString = csv.join("\n");
+  const BOM = "\uFEFF";  
+  const blob = new Blob([BOM + csvString], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `Exam_{{ exam.name|slugify }}_Export.csv`;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  showToast("CSV Exported Successfully!");
+  closeExportCsvModal();
+});
+
 
 </script>
 

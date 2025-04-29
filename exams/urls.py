@@ -29,4 +29,5 @@ urlpatterns = [
     path('<int:exam_id>/merge/resolve-name/', views.resolve_name_conflict_merge, name='resolve_name_conflict_merge'),
     path('<int:exam_id>/grade/student/<int:paper_id>/', views.grade_individual_student, name='grade_one_student'),
     path('exam/<int:exam_id>/delete-all-papers/', views.delete_all_papers, name='delete_all_papers'),
+    path("resolve-flag/<int:issue_id>/", views.resolve_flag, name="resolve_flag"),
 ]

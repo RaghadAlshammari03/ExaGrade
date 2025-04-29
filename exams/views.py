@@ -1244,8 +1244,6 @@ def edit_exam(request, exam_id):
         exam.duration_minutes = request.POST.get("exam_time")
         exam.save()
 
-        # (Optional) Update questions here or handle with JS (more complex)
-
         messages.success(request, "✅ Exam updated successfully!")
         return redirect('exams:detail', exam_id=exam.id)
 
@@ -1451,7 +1449,6 @@ def resolve_flag(request, issue_id):
         issue.resolved = True
         issue.save()
 
-        # Update Grade object if all issues are now resolved
         if not FlaggedIssue.objects.filter(studentpaper=paper, resolved=False).exists():
             total_score = sum(
                 f.manual_score if f.manual_score is not None else 0
