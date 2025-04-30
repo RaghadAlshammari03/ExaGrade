@@ -196,37 +196,7 @@
                   <i data-lucide="file-text" class="w-4 h-4"></i> Download Answered Module
                 </button>
               </form>
-            </div>
-          </div><div class="p-5 border rounded-xl bg-gray-50">
-            <h3 class="text-lg font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <i data-lucide="file-text" class="w-5 h-5 text-gray-500"></i> Solution Module
-            </h3>
-          
-            {% if exam.solution_module %}
-              <a href="{{ exam.solution_module.url }}" target="_blank"
-                class="text-green-600 hover:underline flex items-center gap-1 mb-2">
-                <i data-lucide="download" class="w-4 h-4"></i> View / Download
-              </a>
-            {% endif %}
-          
-            <div class="flex flex-col gap-3 mt-4">
-              <form method="post" action="{% url 'exams:generate_exam_pdf' exam.id %}">
-                {% csrf_token %}
-                <button type="submit"
-                  class="w-fit px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 flex items-center gap-2">
-                  <i data-lucide="printer" class="w-4 h-4"></i> Download Exam Module
-                </button>
-              </form>
-          
-              <form method="post" action="{% url 'exams:generate_answered_pdf' exam.id %}">
-                {% csrf_token %}
-                <button type="submit"
-                  class="w-fit px-4 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 flex items-center gap-2">
-                  <i data-lucide="file-text" class="w-4 h-4"></i> Download Answered Module
-                </button>
-              </form>
-            </div>
-          </div>                           
+            </div>                          
         </div>
     </div>
 
