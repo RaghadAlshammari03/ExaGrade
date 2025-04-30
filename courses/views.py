@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Course
 from exams.models import Exam, Grade
@@ -176,3 +177,11 @@ def edit_course_name(request, course_id):
         messages.error(request, "⚠️ Course name cannot be empty.")
 
     return redirect("courses:detail", course_id=course.id)
+
+@require_POST
+@login_required
+def add_course_ajax(request):
+    name = request.POST.get("name")
+    desc = request.POST.get("description", "")
+    course = Course.objects.create(name=name, description=desc, instructor=request.user)
+    return JsonResponse({"id": course.id, "name": course.name})

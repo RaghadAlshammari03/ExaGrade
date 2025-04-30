@@ -5,7 +5,7 @@ app_name = "exams"
 
 urlpatterns = [
     path("", views.exam_list_view, name="list"),
-    path("add/", views.add_or_edit_exam, name="add"),
+    path("add/", views.add_or_edit_exam, name="add_or_edit_exam"),
     path("<int:exam_id>/", views.exam_detail_view, name="detail"), 
     path("<int:exam_id>/edit/", views.edit_exam, name="edit_exam"),
     path("<int:exam_id>/delete/", views.delete_exam, name="delete_exam"),

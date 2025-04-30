@@ -8,7 +8,7 @@
             Exams
         </h1>
         {% if user.is_instructor %}
-        <a href="{% url 'exams:add' %}" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold shadow-md flex items-center">
+        <a href="{% url 'exams:add_or_edit_exam' %}" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold shadow-md flex items-center">
             <i data-lucide="plus" class="w-5 h-5 mr-2"></i> Add Exam
         </a>
         {% endif %}

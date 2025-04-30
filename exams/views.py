@@ -23,6 +23,9 @@ from django.http import FileResponse
 from .utils import get_grading_stage_text
 from collections import defaultdict
 from datetime import datetime
+from .utils import generate_answered_pdf_from_data, generate_exam_pdf_from_data
+from django.http import QueryDict
+
 
 @login_required
 def exam_list_view(request):
@@ -207,6 +210,22 @@ def add_or_edit_exam(request):
     if not request.user.is_instructor:
         messages.error(request, "⚠️ Only instructors can create or edit exams.")
         return redirect("exams:list")
+    
+    fields = [
+        ("instructor_name", "Instructor Name"),
+        ("course_name", "Course Name"),
+        ("exam_name", "Exam Name"),
+        ("student_name", "Student Name"),
+        ("student_id", "Student ID"),
+        ("paper_number", "Student Number")
+    ]
+
+    header_fields = [
+        "instructor_name", "course_name", "exam_name",
+        "student_name", "student_id", "paper_number"
+    ]
+
+    expected_lines = ["3", "5", "7", "10", "12", "15", "20"]
 
     exam_to_edit = None
     questions_by_type = {}
@@ -230,12 +249,28 @@ def add_or_edit_exam(request):
     if request.method == "POST":
         exam_name = request.POST.get("exam_name")
         course_id = request.POST.get("course")
-        total_marks = request.POST.get("total_marks")
-        exam_time = request.POST.get("exam_time")
+        total_marks = request.POST.get("total_marks") or 0
+        total_marks = int(total_marks)
+        print("[DEBUG] exam_name:", exam_name)
+        print("[DEBUG] course_id:", course_id)
+        print("[DEBUG] total_marks:", total_marks)
 
-        if not exam_name or not course_id or not total_marks:
+
+        header_fields_selected = request.POST.getlist("header_fields")
+        if (
+            ("exam_name" in header_fields_selected and not exam_name)
+            or ("course_name" in header_fields_selected and not course_id)
+        ):
             messages.error(request, "⚠️ Please fill in all required fields.")
-            return redirect(request.path_info)
+            return render(request, "exams/add_exam.html", {
+                "courses": Course.objects.filter(instructor=request.user),
+                "exam": exam_to_edit,
+                "questions_by_type": questions_by_type,
+                "fields": fields,
+                "expected_lines": expected_lines,
+                "header_fields": header_fields_selected,
+                "form_data": request.POST,
+            })
 
         try:
             course = Course.objects.get(id=course_id, instructor=request.user)
@@ -243,13 +278,11 @@ def add_or_edit_exam(request):
             messages.error(request, "❌ Invalid course.")
             return redirect("exams:add")
 
-        # Create or update exam
         if exam_to_edit:
             exam = exam_to_edit
             exam.name = exam_name
             exam.course = course
             exam.total_marks = total_marks
-            exam.duration_minutes = exam_time or 0
             exam.save()
             Question.objects.filter(exam=exam).delete()
         else:
@@ -258,13 +291,16 @@ def add_or_edit_exam(request):
                 course=course,
                 instructor=request.user,
                 total_marks=total_marks,
-                duration_minutes=exam_time or 0
             )
 
         # True/False
         tf_questions = request.POST.getlist('tf_questions[]')
         tf_answers = request.POST.getlist('tf_answers[]')
         tf_marks = request.POST.getlist('tf_marks[]')
+        print("[DEBUG] tf_questions:", tf_questions)
+        print("[DEBUG] tf_answers:", tf_answers)
+        print("[DEBUG] tf_marks:", tf_marks)
+
         for q, a, m in zip(tf_questions, tf_answers, tf_marks):
             if not q or not a or not m:
                 messages.error(request, "⚠️ Please fill in all fields for each True/False question.")
@@ -285,6 +321,11 @@ def add_or_edit_exam(request):
         opt4 = request.POST.getlist('mcq_options_4[]')
         answers = request.POST.getlist('mcq_answers[]')
         mcq_marks = request.POST.getlist('mcq_marks[]')
+        print("[DEBUG] mcq_questions:", mcq_questions)
+        print("[DEBUG] mcq_options:", opt1, opt2, opt3, opt4)
+        print("[DEBUG] mcq_answers:", answers)
+        print("[DEBUG] mcq_marks:", mcq_marks)
+
         for i in range(len(mcq_questions)):
             if not mcq_questions[i] or not answers[i] or not mcq_marks[i] or not opt1[i] or not opt2[i] or not opt3[i] or not opt4[i]:
                 messages.error(request, "⚠️ Please fill in all fields for each MCQ question.")
@@ -304,6 +345,10 @@ def add_or_edit_exam(request):
         short_marks = request.POST.getlist('short_marks[]')
         short_eval_types = request.POST.getlist('short_eval_type[]')
         short_custom_notes = request.POST.getlist('short_custom_eval[]')
+        print("[DEBUG] short_questions:", short_questions)
+        print("[DEBUG] short_answers:", short_answers)
+        print("[DEBUG] short_marks:", short_marks)
+        print("[DEBUG] short_eval_types:", short_eval_types)
 
         for q, a, m, et, custom_note in zip(short_questions, short_answers, short_marks, short_eval_types, short_custom_notes):
             if not q or not a or not m or not et:
@@ -325,6 +370,10 @@ def add_or_edit_exam(request):
         long_marks = request.POST.getlist('long_marks[]')
         long_eval_types = request.POST.getlist('long_eval_type[]')
         long_custom_notes = request.POST.getlist('long_custom_eval[]')
+        print("[DEBUG] long_questions:", long_questions)
+        print("[DEBUG] long_answers:", long_answers)
+        print("[DEBUG] long_marks:", long_marks)
+        print("[DEBUG] long_eval_types:", long_eval_types)
 
         for q, a, m, et, note in zip(long_questions, long_answers, long_marks, long_eval_types, long_custom_notes):
             if not q or not a or not m or not et:
@@ -341,13 +390,18 @@ def add_or_edit_exam(request):
             )
 
         messages.success(request, f"✅ Exam '{exam.name}' {'updated' if exam_to_edit else 'created'} successfully!")
+        request.session[f"exam_form_data_{exam.id}"] = dict(request.POST)
         return redirect("exams:list")
 
     courses = Course.objects.filter(instructor=request.user)
+
     return render(request, "exams/add_exam.html", {
         "courses": courses,
         "exam": exam_to_edit,
         "questions_by_type": questions_by_type,
+        "fields": fields,
+        "expected_lines": expected_lines,
+        "header_fields": header_fields,
     })
 
 @require_POST
@@ -611,7 +665,6 @@ def merge_papers(request, exam_id):
     names = set((p.manual_name or "").strip().lower() for p in papers)
     raw_names = set((p.manual_name or "") for p in papers)
 
-    # Validate IDs
     if "-" in ids or "" in ids or None in ids:
         return JsonResponse({
             "success": False,
@@ -624,7 +677,6 @@ def merge_papers(request, exam_id):
             "error": "Cannot merge: Student IDs do not match."
         }, status=200)
 
-    # Detect Name Conflict
     if len(names) > 1:
         return JsonResponse({
             "success": False,
@@ -859,307 +911,45 @@ def download_answer_sheet(request, exam_id):
     buffer.seek(0)
     return FileResponse(buffer, as_attachment=True, filename=f"{exam.name}_AnswerSheet.pdf")
 
-@require_POST
 @login_required
 def generate_exam_pdf(request, exam_id):
-    def draw_wrapped_text(p, x, y, text, max_width, font="Helvetica", font_size=12, line_height=15):
-        p.setFont(font, font_size)
-        words = text.split()
-        line = ""
-        for word in words:
-            test_line = f"{line} {word}".strip()
-            if stringWidth(test_line, font, font_size) <= max_width:
-                line = test_line
-            else:
-                p.drawString(x, y, line)
-                y -= line_height
-                line = word
-        if line:
-            p.drawString(x, y, line)
-            y -= line_height
-        return y
 
     exam = get_object_or_404(Exam, id=exam_id)
-    questions = exam.questions.all()
 
-    buffer = io.BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    margin_bottom = 80
-    max_text_width = width - 100
-    q_number = 1
-    page_number = 1
+    post_data = request.session.get(f"exam_form_data_{exam_id}")
+    if not post_data:
+        messages.error(request, "⚠️ No saved form data found. Please re-save the exam to generate the PDF.")
+        return redirect("exams:edit_exam", exam_id=exam.id)
 
-    def draw_header():
-        p.setFont("Helvetica-Bold", 18)
-        p.drawCentredString(width / 2, height - 40, f"{exam.name} - Exam Paper")
-        p.setFont("Helvetica", 12)
-        p.drawString(50, height - 70, "Student Name: ____________________________")
-        p.drawString(350, height - 70, "Student ID: ______________________")
+    request.POST = QueryDict('', mutable=True)
+    for key, value in post_data.items():
+        if isinstance(value, list):
+            for v in value:
+                request.POST.update({key: v})
+        else:
+            request.POST[key] = value
 
-    def draw_footer():
-        p.setFont("Helvetica-Oblique", 9)
-        p.setFillColorRGB(0.4, 0.4, 0.4)
-        p.drawString(50, 20, f"Instructor: {exam.instructor.username}  |  Course: {exam.course.name}")
-        p.drawRightString(width - 50, 20, f"Page {page_number}")
-        p.setFillColorRGB(0, 0, 0)
+    return generate_exam_pdf_from_data(request)
 
-    def next_page():
-        nonlocal y, page_number
-        draw_footer()
-        p.showPage()
-        page_number += 1
-        draw_header()
-        y = height - 120
-
-    def section_header(title, instruction):
-        nonlocal y
-        if y < 130:
-            next_page()
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, y, f"■ {title}")
-        y -= 16
-        p.setFont("Helvetica-Oblique", 9)
-        p.setFillColorRGB(0.5, 0, 0)
-        p.drawString(50, y, f"* {instruction}")
-        p.setFillColorRGB(0, 0, 0)
-        y -= 20
-
-    # Draw header for first page
-    draw_header()
-    y = height - 120
-
-    grouped = {
-        "true_false": [],
-        "mcq": [],
-        "short_answer": [],
-        "long_answer": []
-    }
-    for q in questions:
-        grouped[q.question_type].append(q)
-
-    if grouped["true_false"]:
-        section_header("True/False Questions", "Write 'True' or 'False' clearly in the box.")
-        for q in grouped["true_false"]:
-            if y < margin_bottom + 40:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            y -= 10  # Add margin between question and box
-            p.rect(width - 90, y + 5, 35, 15)
-            y -= 20
-            q_number += 1
-
-    if grouped["mcq"]:
-        section_header("Multiple Choice Questions", "Write the letter of the correct option.")
-        for q in grouped["mcq"]:
-            if y < margin_bottom + 55:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            opt_line = "    ".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(q.get_mcq_options())])
-            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width - 70)
-            p.rect(width - 90, y + 5, 35, 15)
-            y -= 30
-            q_number += 1
-
-    if grouped["short_answer"]:
-        section_header("Short Answer Questions", "Write your answer inside the box.")
-        for q in grouped["short_answer"]:
-            if y < margin_bottom + 90:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            p.setDash(1, 2)
-            p.rect(50, y - 60, width - 100, 60)
-            p.setDash()
-            y -= 80
-            q_number += 1
-
-    if grouped["long_answer"]:
-        section_header("Long Answer Questions", "Write your detailed response below.")
-        for q in grouped["long_answer"]:
-            if y < margin_bottom + 150:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            p.rect(50, y - 120, width - 100, 120)
-            y -= 140
-            q_number += 1
-
-    draw_footer()
-    p.save()
-    buffer.seek(0)
-    return FileResponse(buffer, as_attachment=True, filename=f"{exam.name}_PaperExam.pdf")
-
-@require_POST
 @login_required
 def generate_answered_pdf(request, exam_id):
 
-    def draw_wrapped_text(p, x, y, text, max_width, font="Helvetica", font_size=12, line_height=15, color=(0, 0, 0)):
-        p.setFont(font, font_size)
-        p.setFillColorRGB(*color)
-        words = text.split()
-        line = ""
-        for word in words:
-            test_line = f"{line} {word}".strip()
-            if stringWidth(test_line, font, font_size) <= max_width:
-                line = test_line
-            else:
-                p.drawString(x, y, line)
-                y -= line_height
-                line = word
-        if line:
-            p.drawString(x, y, line)
-            y -= line_height
-        p.setFillColorRGB(0, 0, 0)
-        return y
-
-    def estimate_height(text, max_width, font="Helvetica", font_size=12, line_height=15):
-        words = text.split()
-        lines = 1
-        line = ""
-        for word in words:
-            test_line = f"{line} {word}".strip()
-            if stringWidth(test_line, font, font_size) <= max_width:
-                line = test_line
-            else:
-                lines += 1
-                line = word
-        return lines * line_height
-
     exam = get_object_or_404(Exam, id=exam_id)
-    questions = exam.questions.all()
 
-    buffer = io.BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    margin_bottom = 80
-    max_text_width = width - 100
-    q_number = 1
-    page_number = 1
+    post_data = request.session.get(f"exam_form_data_{exam_id}")
+    if not post_data:
+        messages.error(request, "⚠️ No saved form data found. Please re-save the exam to generate the PDF.")
+        return redirect("exams:edit_exam", exam_id=exam.id)
 
-    def draw_header():
-        p.setFont("Helvetica-Bold", 18)
-        p.drawCentredString(width / 2, height - 40, f"{exam.name} - Answered Module")
-        p.setFont("Helvetica", 12)
-        p.drawString(50, height - 70, "Student Name: ____________________________")
-        p.drawString(350, height - 70, "Student ID: ______________________")
+    request.POST = QueryDict('', mutable=True)
+    for key, value in post_data.items():
+        if isinstance(value, list):
+            for v in value:
+                request.POST.update({key: v})
+        else:
+            request.POST[key] = value
 
-    def draw_footer():
-        p.setFont("Helvetica-Oblique", 9)
-        p.setFillColorRGB(0.4, 0.4, 0.4)
-        p.drawString(50, 20, f"Instructor: {exam.instructor.username}  |  Course: {exam.course.name}")
-        p.drawRightString(width - 50, 20, f"Page {page_number}")
-        p.setFillColorRGB(0, 0, 0)
-
-    def next_page():
-        nonlocal y, page_number
-        draw_footer()
-        p.showPage()
-        page_number += 1
-        draw_header()
-        y = height - 120
-
-    def section_header(title, instruction):
-        nonlocal y
-        if y < 130:
-            next_page()
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, y, f"■ {title}")
-        y -= 16
-        p.setFont("Helvetica-Oblique", 9)
-        p.setFillColorRGB(0.5, 0, 0)
-        p.drawString(50, y, f"* {instruction}")
-        p.setFillColorRGB(0, 0, 0)
-        y -= 20
-
-    # Start on first page
-    draw_header()
-    y = height - 120
-
-    grouped = {
-        "true_false": [],
-        "mcq": [],
-        "short_answer": [],
-        "long_answer": []
-    }
-    for q in questions:
-        grouped[q.question_type].append(q)
-
-    # True/False
-    if grouped["true_false"]:
-        section_header("True/False Questions", "Write 'True' or 'False' clearly in the box.")
-        for q in grouped["true_false"]:
-            question_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width) + 45
-            if y < margin_bottom + question_height:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            y -= 10  
-            p.rect(width - 90, y + 5, 35, 15)
-            p.setFont("Helvetica-Bold", 11)
-            p.setFillColorRGB(0.2, 0.4, 0.9)
-            p.drawString(width - 85, y + 7, q.correct_answer or ''[:15])
-            p.setFillColorRGB(0, 0, 0)
-            y -= 20
-            q_number += 1
-
-    # MCQ
-    if grouped["mcq"]:
-        section_header("Multiple Choice Questions", "Write the letter of the correct option.")
-        for q in grouped["mcq"]:
-            opt_line = "    ".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(q.get_mcq_options())])
-            q_height = (
-                estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width) +
-                estimate_height(opt_line, max_text_width, font_size=11) + 60
-            )
-            if y < margin_bottom + q_height:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            y = draw_wrapped_text(p, 70, y, opt_line, max_text_width - 70, font_size=11)
-            y -= 10
-            p.rect(width - 90, y + 5, 35, 15)
-            p.setFont("Helvetica-Bold", 11)
-            p.setFillColorRGB(0.2, 0.4, 0.9)
-            p.drawString(width - 85, y + 7, q.correct_answer[:15])
-            p.setFillColorRGB(0, 0, 0)
-            y -= 30
-            q_number += 1
-
-    # Short Answer
-    if grouped["short_answer"]:
-        section_header("Short Answer Questions", "Write your answer inside the box.")
-        for q in grouped["short_answer"]:
-            text_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            answer_height = estimate_height(q.correct_answer or "", max_text_width - 20, font_size=11)
-            total_height = text_height + answer_height + 90
-            if y < margin_bottom + total_height:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            p.setDash(1, 2)
-            p.rect(50, y - 60, width - 100, 60)
-            p.setDash()
-            y = draw_wrapped_text(p, 55, y - 20, q.correct_answer or "", width - 110,
-                                  font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
-            y -= 50
-            q_number += 1
-
-    # Long Answer
-    if grouped["long_answer"]:
-        section_header("Long Answer Questions", "Write your detailed response below.")
-        for q in grouped["long_answer"]:
-            text_height = estimate_height(f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            answer_height = estimate_height(q.correct_answer or "", width - 110, font_size=11)
-            total_height = text_height + answer_height + 150
-            if y < margin_bottom + total_height:
-                next_page()
-            y = draw_wrapped_text(p, 50, y, f"{q_number}. {q.text} [{q.marks} marks]", max_text_width)
-            p.rect(50, y - 120, width - 100, 120)
-            y = draw_wrapped_text(p, 55, y - 20, q.correct_answer or "", width - 110,
-                                  font="Helvetica", font_size=11, color=(0.2, 0.4, 0.9))
-            y -= 80
-            q_number += 1
-
-    draw_footer()
-    p.save()
-    buffer.seek(0)
-    return FileResponse(buffer, as_attachment=True, filename=f"{exam.name}_AnsweredModule.pdf")
+    return generate_answered_pdf_from_data(request)
 
 @csrf_exempt
 def preview_exam_pdf(request):
@@ -1204,7 +994,6 @@ def upload_student_paper(request, exam_id):
             names_per_id[paper.manual_id].add(paper.manual_name)
             papers_by_id[paper.manual_id].append(paper.id)
 
-        # Try to match the student by first and last name
         if paper.manual_name:
             parts = paper.manual_name.split()
             first = parts[0]
@@ -1220,7 +1009,6 @@ def upload_student_paper(request, exam_id):
 
         paper.save()
 
-    # Now auto-merge by manual_id:
     student_papers = StudentPaper.objects.filter(exam=exam)
     grouped = defaultdict(list)
     for paper in student_papers:
@@ -1272,7 +1060,6 @@ def edit_exam(request, exam_id):
     if request.method == "POST":
         exam.name = request.POST.get("exam_name")
         exam.total_marks = request.POST.get("total_marks")
-        exam.duration_minutes = request.POST.get("exam_time")
         exam.save()
 
         messages.success(request, "✅ Exam updated successfully!")
@@ -1348,7 +1135,6 @@ def send_grades(request, exam_id):
         grade = Grade.objects.filter(studentpaper=paper).first()
         content = []
 
-        # ✅ Log grade
         if "grades" in options and grade:
             score = grade.final_score()
             content.append(f"Score: {score}")
@@ -1356,14 +1142,12 @@ def send_grades(request, exam_id):
         else:
             print("❌ Grade not included or missing")
 
-        # ✅ Log AI feedback
         if "ai-feedback" in options and grade and grade.feedback:
             content.append(f"AI Feedback:\n{grade.feedback}")
             print("✅ AI Feedback included")
         else:
             print("❌ AI Feedback missing or not selected")
 
-        # ✅ Log instructor feedback
         if "instructor-feedback" in options and paper.instructor_feedback:
             content.append(f"Instructor Feedback:\n{paper.instructor_feedback}")
             print("✅ Instructor Feedback included")
@@ -1372,7 +1156,6 @@ def send_grades(request, exam_id):
 
         attachments = []
 
-        # ✅ Attach exam paper
         if "exam-paper" in options and paper.file:
             try:
                 paper.file.open("rb")
@@ -1393,7 +1176,6 @@ def send_grades(request, exam_id):
 
         sent_count += 1
 
-    # Store unmatched for modal display
     request.session["unmatched_ids"] = unmatched_ids
 
     messages.success(request, f"✅ Grades sent to {sent_count} student(s).")
