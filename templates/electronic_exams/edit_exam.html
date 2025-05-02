@@ -6,7 +6,10 @@
 
         <!-- Header -->
         <div class="flex justify-between items-center border-b pb-4 mb-6">
-            <h1 class="text-3xl font-extrabold text-gray-900">✏️ Edit Exam: {{ exam.title }}</h1>
+            <h1 class="text-3xl font-extrabold text-gray-900 flex items-center gap-2">
+                <i data-lucide="edit-3" class="w-6 h-6"></i>
+                Edit Exam: {{ exam.title }}
+            </h1>
         </div>
 
         <!-- Edit Exam Form -->
@@ -16,16 +19,21 @@
             <!-- Exam Title -->
             <label class="block text-lg font-semibold">Exam Name:</label>
             <input type="text" name="exam_name" value="{{ exam.title }}" required class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-400 transition mb-4">
+
             <!-- Total Marks Input -->
-            <label class="block text-lg font-semibold">💯 Total Marks:</label>
+            <label class="block text-lg font-semibold flex items-center gap-1">
+                <i data-lucide="hash" class="w-5 h-5"></i>
+                Total Marks:
+            </label>
             <input type="number" name="total_marks" value="{{ exam.total_marks }}" min="1" required
               class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-400 transition mb-4">
 
-              <label class="block text-lg font-semibold">Can Navigate Between Questions?</label>
-                <select name="can_navigate" class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-400 transition mb-4">
-                    <option value="true" {% if exam.can_navigate %}selected{% endif %}>Yes</option>
-                    <option value="false" {% if not exam.can_navigate %}selected{% endif %}>No (One-Way Only)</option>
-                </select>
+            <!-- Can Navigate -->
+            <label class="block text-lg font-semibold">Can Navigate Between Questions?</label>
+            <select name="can_navigate" class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-400 transition mb-4">
+                <option value="true" {% if exam.can_navigate %}selected{% endif %}>Yes</option>
+                <option value="false" {% if not exam.can_navigate %}selected{% endif %}>No (One-Way Only)</option>
+            </select>
 
             <!-- Course Selection -->
             <label class="block text-lg font-semibold">Course:</label>
@@ -36,71 +44,90 @@
             </select>
 
             <!-- Questions Section -->
-            <h2 class="text-2xl font-semibold text-gray-800 mt-6 mb-4">📄 Exam Questions</h2>
+            <h2 class="text-2xl font-semibold text-gray-800 mt-6 mb-4 flex items-center gap-2">
+                <i data-lucide="file-text" class="w-5 h-5"></i>
+                Exam Questions
+            </h2>
             <div id="questionsContainer">
-                <!-- Questions will be dynamically added here -->
             </div>
 
             <!--  Full-Width Add Question Button -->
-            <button type="button" id="addQuestionBtn" class="w-full mt-6 bg-green-600 text-white py-3 rounded-lg shadow-md font-semibold text-lg hover:bg-green-700 transition">
-                ➕ Add New Question
+            <button type="button" id="addQuestionBtn" class="w-full mt-6 bg-green-600 text-white py-3 rounded-lg shadow-md font-semibold text-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                Add New Question
             </button>
 
-            <!-- ✅ Submit Button -->
-            <button type="submit" class="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold text-lg shadow-md hover:bg-blue-700 transition">
-                ✅ Update Exam
+            <!-- Submit Button -->
+            <button type="submit" class="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold text-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                <i data-lucide="check" class="w-5 h-5"></i>
+                Update Exam
             </button>
         </form>
 
     </div>
 </div>
 
-<!-- ✅ JavaScript for Dynamic Updates -->
+<!-- JavaScript for Dynamic Updates -->
 <script>
+function refreshIcons() {
+  if (window.lucide) lucide.createIcons();
+}
+
 document.addEventListener("DOMContentLoaded", function () {
+    refreshIcons();
     const questionsContainer = document.getElementById("questionsContainer");
     const addQuestionBtn = document.getElementById("addQuestionBtn");
 
-    // Function to add a new question dynamically
     addQuestionBtn.addEventListener("click", function () {
-        const questionId = Date.now(); // Unique ID for the question
+        const questionId = Date.now();
         const newQuestionHTML = `
             <div class="question-item bg-gray-50 border p-4 rounded-lg shadow-md transition hover:shadow-lg my-3">
-                <label class="block text-lg font-semibold">Question:</label>
-                <input type="text" name="questions[]" required class="question-text w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
+                <label class="block text-lg font-semibold flex items-center gap-1">
+                  <i data-lucide="help-circle" class="w-5 h-5"></i>
+                  Question:
+                </label>
+                <input type="text" name="questions[]" required class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
 
-                <!-- ✅ Marks Input -->
-                <label class="block text-sm font-semibold mt-2">Marks:</label>
+                <label class="block text-sm font-semibold mt-2 flex items-center gap-1">
+                  <i data-lucide="hash" class="w-4 h-4"></i>
+                  Marks:
+                </label>
                 <input type="number" name="marks[]" min="1" required class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
 
                 <label class="block text-sm text-gray-600 mt-2">Type:</label>
-                <select name="question_types[]" class="question-type w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
+                <select name="question_types[]" class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
                     <option value="TF" selected>True/False</option>
                     <option value="MCQ">MCQ</option>
                     <option value="SHORT">Short Answer</option>
                     <option value="LONG">Long Answer</option>
                 </select>
 
-                <!-- ✅ Answer Input for Short & Long Answer -->
                 <div class="short-long-answer hidden mt-3">
-                    <label class="block text-sm font-semibold">Correct Answer:</label>
-                    <textarea name="text_answers[]" class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition" placeholder="Write the correct answer here..."></textarea>
+                    <label class="block text-sm font-semibold flex items-center gap-1">
+                      <i data-lucide="edit" class="w-4 h-4"></i>
+                      Correct Answer:
+                    </label>
+                    <textarea name="text_answers[]" class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition"></textarea>
                 </div>
 
-                <!-- ✅ True/False Selection (DEFAULT SHOWN) -->
                 <div class="tf-answer mt-3">
-                    <label class="block text-sm font-semibold">Correct Answer:</label>
+                    <label class="block text-sm font-semibold flex items-center gap-1">
+                      <i data-lucide="toggle-left" class="w-4 h-4"></i>
+                      Correct Answer:
+                    </label>
                     <select name="tf_answers[]" class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
                         <option value="True">True</option>
                         <option value="False">False</option>
                     </select>
                 </div>
 
-                <!-- ✅ MCQ Options Section -->
                 <div class="options-container hidden mt-3">
-                    <h3 class="text-sm font-semibold text-gray-700">MCQ Options:</h3>
+                    <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                      <i data-lucide="list" class="w-4 h-4"></i>
+                      MCQ Options:
+                    </h3>
                     <div class="mcq-options">
-                        ${["A", "B", "C", "D"].map(letter => `
+                        ${["A","B","C","D"].map(letter => `
                             <div class="flex gap-2 items-center my-2">
                                 <input type="text" name="mcq_options_${questionId}[]" placeholder="Option ${letter}" required class="w-full p-2 border rounded focus:ring focus:ring-blue-400 transition">
                                 <input type="radio" name="mcq_answer_${questionId}" value="${letter}" class="mcq-correct-answer">
@@ -109,53 +136,33 @@ document.addEventListener("DOMContentLoaded", function () {
                     </div>
                 </div>
 
-                <button type="button" class="delete-question bg-red-600 text-white px-4 py-2 rounded-lg mt-3 shadow-md hover:bg-red-700 transition w-full">
-                    🗑️ Delete Question
+                <button type="button" class="delete-question bg-red-600 text-white px-4 py-2 rounded-lg mt-3 shadow-md hover:bg-red-700 transition w-full flex items-center justify-center gap-2">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    Delete Question
                 </button>
             </div>`;
-        
         questionsContainer.insertAdjacentHTML("beforeend", newQuestionHTML);
+        refreshIcons();
     });
 
-    // Show correct answer fields when question type changes
-    questionsContainer.addEventListener("change", function (event) {
-        if (event.target.classList.contains("question-type")) {
-            const parent = event.target.closest(".question-item");
-            const mcqContainer = parent.querySelector(".options-container");
-            const tfContainer = parent.querySelector(".tf-answer");
-            const shortLongAnswer = parent.querySelector(".short-long-answer");
-
-            if (event.target.value === "MCQ") {
-                mcqContainer.classList.remove("hidden");
-                tfContainer.classList.add("hidden");
-                shortLongAnswer.classList.add("hidden");
-            } else if (event.target.value === "TF") {
-                tfContainer.classList.remove("hidden");
-                mcqContainer.classList.add("hidden");
-                shortLongAnswer.classList.add("hidden");
-            } else {
-                shortLongAnswer.classList.remove("hidden");
-                mcqContainer.classList.add("hidden");
-                tfContainer.classList.add("hidden");
-            }
+    questionsContainer.addEventListener("change", function(e) {
+        if (e.target.classList.contains("question-type")) {
+            const parent = e.target.closest(".question-item");
+            parent.querySelector(".options-container").classList.toggle("hidden", e.target.value !== "MCQ");
+            parent.querySelector(".tf-answer").classList.toggle("hidden", e.target.value !== "TF");
+            parent.querySelector(".short-long-answer").classList.toggle("hidden", !(e.target.value === "SHORT" || e.target.value === "LONG"));
         }
     });
 
-    // Ensure only one correct answer is selected in MCQ
-    questionsContainer.addEventListener("change", function (event) {
-        if (event.target.classList.contains("mcq-correct-answer")) {
-            const parent = event.target.closest(".mcq-options");
-            parent.querySelectorAll(".mcq-correct-answer").forEach(radio => {
-                if (radio !== event.target) radio.checked = false;
-            });
+    questionsContainer.addEventListener("change", function(e) {
+        if (e.target.classList.contains("mcq-correct-answer")) {
+            const parent = e.target.closest(".mcq-options");
+            parent.querySelectorAll(".mcq-correct-answer").forEach(r => r !== e.target ? r.checked = false : null);
         }
     });
 
-    // Delete question when clicking the delete button
-    questionsContainer.addEventListener("click", function (event) {
-        if (event.target.classList.contains("delete-question")) {
-            event.target.closest(".question-item").remove();
-        }
+    questionsContainer.addEventListener("click", function(e) {
+        if (e.target.closest(".delete-question")) e.target.closest(".question-item").remove();
     });
 });
 </script>
