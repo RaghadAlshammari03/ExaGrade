@@ -1067,7 +1067,7 @@ def edit_exam(request, exam_id):
 
     courses = Course.objects.filter(instructor=request.user)
     questions = Question.objects.filter(exam=exam)
-    return render(request, "exams/add_or_edit_exam.html", {
+    return render(request, "exams/add_exam.html", {
         "exam": exam,
         "courses": courses,
         "questions": questions,
