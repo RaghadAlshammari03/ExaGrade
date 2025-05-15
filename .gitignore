@@ -9,5 +9,5 @@ staticfiles/
 .DS_Store
 venv/
 node_modules/
-media\profiles
-media\exams
+media/profiles/
+media/exams/
