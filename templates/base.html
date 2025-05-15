@@ -57,14 +57,12 @@
                     {% if user.is_instructor %}
                         <li>
                             <a href="{% url 'users:instructor_dashboard' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                                <i class="fas fa-chart-line"></i>
                                 <span>Dashboard</span>
                             </a>
                         </li>
                     {% else %}
                         <li>
                             <a href="{% url 'users:student_dashboard' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                                <i class="fas fa-tachometer-alt"></i>
                                 <span>Dashboard</span>
                             </a>
                         </li>
@@ -73,7 +71,6 @@
                     <!-- Courses -->
                     <li>
                         <a href="{% url 'courses:list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                            <i class="fas fa-book"></i>
                             <span>Courses</span>
                         </a>
                     </li>
@@ -81,13 +78,11 @@
                     {% if user.is_instructor %}
                         <li>
                             <a href="{% url 'exams:list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                                <i class="fas fa-file-alt"></i>
                                 <span>Paper Exams</span>
                             </a>
                         </li>
                         <li>
                                 <a href="{% url 'electronic_exams:exam_list' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                                    <i class="fas fa-laptop-code"></i>
                                     <span>Electronic Exams</span>
                                 </a>                                         
                         </li>
@@ -97,19 +92,16 @@
                     <!-- Profile, Settings, Logout -->
                     <li>
                         <a href="{% url 'users:profile' request.user.id %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                            <i class="fas fa-user"></i>
                             <span>Profile</span>
                         </a>
                     </li>                    
                     <li>
                         <a href="{% url 'users:settings' %}" class="flex items-center space-x-2 hover:text-[#98BBF5]">
-                            <i class="fas fa-cog"></i>
                             <span>Settings</span>
                         </a>
                     </li>
                     <li>
                         <a href="{% url 'users:logout' %}" class="flex items-center space-x-2 text-red-400 hover:text-red-600">
-                            <i class="fas fa-sign-out-alt"></i>
                             <span>Logout</span>
                         </a>
                     </li>

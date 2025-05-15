@@ -5,7 +5,7 @@
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold text-gray-800 flex items-center gap-2">
-            Electronic Exams
+            Online Exams
         </h1>
         {% if user.is_instructor %}
         <a href="{% url 'electronic_exams:create' %}" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold shadow-md flex items-center">
@@ -54,7 +54,7 @@
         <tr>
           <td colspan="5" class="text-center py-20 text-gray-400">
             <img src="https://cdn-icons-png.flaticon.com/512/4076/4076432.png" class="w-24 mx-auto mb-4 opacity-60" alt="no exams">
-            <p class="text-lg font-medium">No electronic exams available.</p>
+            <p class="text-lg font-medium">No online exams available.</p>
           </td>
         </tr>
         {% endfor %}
