@@ -93,8 +93,6 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 
 Follow these steps to set up **ExaGrade** on your local machine.
 
----
-
 ### **1. Clone the Repository**
 
 git clone https://github.com/RaghadAlshammari03/ExaGrade.git
