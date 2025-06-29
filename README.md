@@ -86,3 +86,7 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 - **AI Grading:** [OpenAI ChatGPT API](https://platform.openai.com/)  
 - **PDFs:** ReportLab  
 - **Database:** SQLite (for development)
+
+---
+
+Made by Raghad Alshammari - Sadeem Alresaini - Rana.
