@@ -588,18 +588,17 @@ def merge_papers_by_id(request, exam_id):
     if papers.count() < 2:
         return JsonResponse({"error": "Not enough papers to merge"}, status=400)
 
-    # 🔥 NEW: Pick a proper base paper (oldest)
     base_paper = papers.order_by('id').first()
 
     for paper in papers:
         if paper != base_paper:
             paper.is_merged = True
-            paper.merged_into = base_paper  # ✅ This was missing
+            paper.merged_into = base_paper  
             paper.needs_regrading = True
             paper.save()
 
     base_paper.is_merged = True
-    base_paper.merged_into = None  # Parent must have merged_into=null
+    base_paper.merged_into = None  
     base_paper.needs_regrading = True
     base_paper.save()
 
