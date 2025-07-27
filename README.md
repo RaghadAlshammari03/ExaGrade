@@ -9,7 +9,7 @@
 **ExaGrade** is a Django-based platform built to simplify how exams are created, graded, and reviewed. It works with both scanned paper exams and online assessments. With built-in OCR and AI support, ExaGrade can extract handwritten answers, auto-grade responses, and flag anything unclear.
 
 
-Key capabilities include:
+**Key capabilities include:**
 - Handwriting recognition for scanned papers using **HandwritingOCR API**  
 - Auto-grading for multiple question types with **ChatGPT API**  
 - Intelligent flagging for ambiguous responses requiring manual review  
@@ -108,9 +108,9 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 - pip install -r requirements.txt
 
 ### **4. Add Your API Keys**
-- Create a .env file in the root directory and add:
-  - HANDWRITING_OCR_API_KEY=your_handwritingocr_api_key
-  - OPENAI_API_KEY=your_openai_api_key
+Create a .env file in the root directory and add:
+- HANDWRITING_OCR_API_KEY=your_handwritingocr_api_key
+- OPENAI_API_KEY=your_openai_api_key
 
 These keys are used for:
 - HANDWRITING_OCR_API_KEY: To extract handwritten answers from scanned papers
@@ -138,3 +138,5 @@ These keys are used for:
 ---
 
 Made by Raghad Alshammari - Sadeem Alresaini - Rana Alnughaimshi.
+
+Supervisor: Dr. Abdulaziz Algablan
