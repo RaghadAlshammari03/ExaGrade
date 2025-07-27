@@ -86,7 +86,55 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 - **AI Grading:** [OpenAI ChatGPT API](https://platform.openai.com/)  
 - **PDFs:** ReportLab  
 - **Database:** SQLite (for development)
+- 
+---
+
+## 🚀 Getting Started
+
+### **1. Clone the Repository**
+git clone https://github.com/RaghadAlshammari03/ExaGrade.git
+cd ExaGrade
+
+### **2. Set Up the Virtual Environment**
+- For macOS/Linux:
+python3 -m venv venv
+source venv/bin/activate
+
+- For Windows:
+python -m venv venv
+venv\Scripts\activate
+
+### **3. Install Dependencies**
+pip install -r requirements.txt
+
+### **4. Add Your API Keys**
+Create a .env file in the root directory and add:
+HANDWRITING_OCR_API_KEY=your_handwritingocr_api_key
+OPENAI_API_KEY=your_openai_api_key
+
+These keys are used for:
+- HANDWRITING_OCR_API_KEY: To extract handwritten answers from scanned papers
+- OPENAI_API_KEY: To grade answers and generate feedback using ChatGPT
+
+### **5. Run the Development Server**
+python manage.py migrate
+python manage.py runserver
+Open your browser and go to: http://127.0.0.1:8000
 
 ---
 
-Made by Raghad Alshammari - Sadeem Alresaini - Rana.
+## 🤖 How APIs Are Used
+#HandwritingOCR API Usage
+- Located in: exam/utils/ocr_utils.py
+- Converts uploaded scanned PDFs or images into structured student answers using OCR.
+- The extracted answers are mapped to questions in the database.
+
+#ChatGPT API Usage
+- Located in: exam/utils/grading.py
+- The grade_answer() function sends the student answer, question prompt, correct answer, and evaluation type to ChatGPT.
+- GPT returns a score (out of total marks), feedback, and flags if clarification is needed.
+- Different evaluation modes are supported: "strict", "flexible", "keywords", and "custom".
+
+---
+
+Made by Raghad Alshammari - Sadeem Alresaini - Rana Alnughaimshi.
