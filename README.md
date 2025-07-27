@@ -86,6 +86,7 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 - **AI Grading:** [OpenAI ChatGPT API](https://platform.openai.com/)  
 - **PDFs:** ReportLab  
 - **Database:** SQLite (for development)
+
 ---
 
 ## 🚀 Getting Started
@@ -96,20 +97,20 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 
 ### **2. Set Up the Virtual Environment**
 - For macOS/Linux:
--- python3 -m venv venv
--- source venv/bin/activate
+  - python3 -m venv venv
+  - source venv/bin/activate
 
 - For Windows:
--- python -m venv venv
--- venv\Scripts\activate
+  - python -m venv venv
+  - venv\Scripts\activate
 
 ### **3. Install Dependencies**
 - pip install -r requirements.txt
 
 ### **4. Add Your API Keys**
 - Create a .env file in the root directory and add:
--- HANDWRITING_OCR_API_KEY=your_handwritingocr_api_key
--- OPENAI_API_KEY=your_openai_api_key
+  - HANDWRITING_OCR_API_KEY=your_handwritingocr_api_key
+  - OPENAI_API_KEY=your_openai_api_key
 
 These keys are used for:
 - HANDWRITING_OCR_API_KEY: To extract handwritten answers from scanned papers
