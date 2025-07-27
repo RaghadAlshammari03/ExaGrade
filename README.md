@@ -124,12 +124,12 @@ Open your browser and go to: http://127.0.0.1:8000
 ---
 
 ## 🤖 How APIs Are Used
-#HandwritingOCR API Usage
+# HandwritingOCR API Usage
 - Located in: exam/utils/ocr_utils.py
 - Converts uploaded scanned PDFs or images into structured student answers using OCR.
 - The extracted answers are mapped to questions in the database.
 
-#ChatGPT API Usage
+# ChatGPT API Usage
 - Located in: exam/utils/grading.py
 - The grade_answer() function sends the student answer, question prompt, correct answer, and evaluation type to ChatGPT.
 - GPT returns a score (out of total marks), feedback, and flags if clarification is needed.
