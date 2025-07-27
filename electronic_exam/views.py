@@ -7,11 +7,11 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import UpdateView
-from exa_ai.grading import grade_answer, parse_score_and_feedback
+from utils.grading import grade_answer, parse_score_and_feedback
 from .models import ElectronicExam, Question, Choice, StudentResponse
 from courses.models import Course
 from users.models import CustomUser
-from exa_ai.grading import grade_answer, parse_score_and_feedback
+from utils.grading import grade_answer, parse_score_and_feedback
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json

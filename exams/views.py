@@ -10,7 +10,7 @@ from reportlab.pdfgen import canvas
 import os
 from django.http import JsonResponse
 from .models import Exam
-from exa_ai.grading import grade_answer, parse_score_and_feedback
+from utils.grading import grade_answer, parse_score_and_feedback
 from users.models import CustomUser
 from .models import Exam, Grade, StudentPaper, Question
 from courses.models import Course
@@ -408,7 +408,7 @@ def add_or_edit_exam(request):
 @login_required
 def grade_exam(request, exam_id):
     from utils.parser import group_papers_by_id
-    from exa_ai.grading import grade_answer, parse_score_and_feedback
+    from utils.grading import grade_answer, parse_score_and_feedback
     from exams.models import FlaggedIssue
     from datetime import datetime
 
@@ -509,7 +509,7 @@ def grade_exam(request, exam_id):
 @require_POST
 @login_required
 def grade_individual_student(request, exam_id, paper_id):
-    from exa_ai.grading import grade_answer, parse_score_and_feedback
+    from utils.grading import grade_answer, parse_score_and_feedback
 
     exam = get_object_or_404(Exam, id=exam_id)
     base_paper = get_object_or_404(StudentPaper, id=paper_id, exam=exam)
