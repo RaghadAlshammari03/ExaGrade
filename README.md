@@ -92,8 +92,8 @@ The same applies to the **Answered Module**, which shows a preview of a complete
 ## 🚀 Getting Started
 
 ### **1. Clone the Repository**
-git clone https://github.com/RaghadAlshammari03/ExaGrade.git
-cd ExaGrade
+- git clone https://github.com/RaghadAlshammari03/ExaGrade.git
+- cd ExaGrade
 
 ### **2. Set Up the Virtual Environment**
 - For macOS/Linux:
