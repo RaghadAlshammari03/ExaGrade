@@ -125,15 +125,32 @@ These keys are used for:
 
 ## 🤖 How APIs Are Used
 ### HandwritingOCR API Usage
-- Located in: exam/utils/ocr_utils.py
-- Converts uploaded scanned PDFs or images into structured student answers using OCR.
-- The extracted answers are mapped to questions in the database.
+- **Location:** `utils/utils.py`  
+- **Function:** `extract_text_from_pdf(file_path)`
+- **Purpose:**  
+  - Uploads scanned PDF/image files to the HandwritingOCR API.
+  - Polls for the result and returns the transcribed text.
+- **How it's used:**  
+  - The extracted text is processed to retrieve the student’s name, ID, and answers using helper functions like `extract_name_and_id()`.
+  - These answers are then matched to questions in the database for grading.
+
+---
 
 ### ChatGPT API Usage
-- Located in: exam/utils/grading.py
-- The grade_answer() function sends the student answer, question prompt, correct answer, and evaluation type to ChatGPT.
-- GPT returns a score (out of total marks), feedback, and flags if clarification is needed.
-- Different evaluation modes are supported: "strict", "flexible", "keywords", and "custom".
+- **Location:** `utils/grading.py`  
+- **Function:** `grade_answer()`
+- **Purpose:**  
+  - Sends a prompt to ChatGPT containing:
+    - Question
+    - Model solution
+    - Student answer
+    - Evaluation type (`strict`, `flexible`, `keywords`, `custom`, or `coding`)
+  - Returns a score, feedback, and a flag if the answer requires manual review.
+- **Function:** `parse_score_and_feedback()`
+  - Parses ChatGPT’s response and extracts:
+    - Score
+    - Feedback
+    - Attention flag for unclear or problematic answers
 
 ---
 
