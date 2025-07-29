@@ -1,0 +1,75 @@
+from numpy import array, sum, sqrt
+import numpy as np
+
+
+def compare_multiple_students(scores_a, scores_b):
+    similarities = []
+
+    for a, b in zip(scores_a, scores_b):
+        a = np.array(a, dtype=float)
+        b = np.array(b, dtype=float)
+        w = np.ones_like(a)  # equal weight per question
+
+        # Cosine
+        dot = sum(w * a * b)
+        norm_a = sqrt(sum(w * a * a))
+        norm_b = sqrt(sum(w * b * b))
+        cosine = dot / (norm_a * norm_b) if norm_a * norm_b != 0 else 0
+
+        # Euclidean
+        euclidean = sqrt(sum(w * (a - b) ** 2))
+        euclidean_sim = 1 / (1 + euclidean)
+
+        # Exact Match (weighted)
+        exact = sum(w * (a == b)) / sum(w)
+
+        similarities.append((cosine, euclidean_sim, exact))
+
+    # Averages
+    cosine_avg = np.mean([c for c, _, _ in similarities])
+    euclidean_avg = np.mean([e for _, e, _ in similarities])
+    exact_avg = np.mean([x for _, _, x in similarities])
+
+    return {
+        "average_cosine_similarity": cosine_avg,
+        "average_euclidean_similarity": euclidean_avg,
+        "average_exact_match_ratio": exact_avg,
+        "per_student": similarities
+    }
+
+
+corrector_A = [
+    [1, 0, 1, 0, 0, 1, 1],
+    [1, 0, 1, 1, 1, 1.5, 3],
+    [1, 0, 0, 1, 0, 1, 2.5],
+    [1, 0, 1, 0, 1, 0.5, 3],
+    [1, 0, 0, 0, 1, 0.5, 3],
+    [1, 1, 0, 1, 1, 2, 3],
+    [1, 0, 0, 0, 1, 1.5, 2],
+    [1, 0, 0, 1, 0, 1, 2.5],
+    [1, 0, 0, 1, 0, 1.5, 3],
+    [1, 1, 0, 0, 1, 1, 3],
+    [1, 1, 0, 1, 1, 2, 3],
+    [1, 1, 0, 1, 1, 2, 2.5],
+    [0, 0, 0, 1, 1, 1, 1]
+]
+
+corrector_B = [
+    [1, 0, 1, 0, 0, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 1, 0, 0, 0],
+    [1, 1, 1, 0, 1, 0, 0],
+    [1, 0, 0, 0, 0, 0, 1],
+    [1, 1, 0, 1, 1, 0, 1],
+    [1, 0, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 1],
+    [1, 1, 0, 0, 1, 0, 0],
+    [1, 1, 0, 1, 1, 0, 2],
+    [1, 1, 0, 1, 1, 0, 0],
+    [0, 0, 0, 1, 1, 0, 0]
+]
+
+compare_Ins_ExaGrade = compare_multiple_students(corrector_A, corrector_B)
+for item in compare_Ins_ExaGrade:
+    print(item, "  -- "  , compare_Ins_ExaGradecompare_Ins_ExaGrade[item])
